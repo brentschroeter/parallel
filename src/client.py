@@ -102,8 +102,19 @@ class ImgPlusClient(object):
 
 	def kill_worker(self, context=zmq.Context()):
 		controller = context.socket(zmq.PUB)
-		controller.bind('tcp://*:%s' % self.control_port)
-		controller.send('0')
+		controller.connect('tcp://*:%s' % self.control_port)
+		request = ['0']
+		controller.send_multipart(request)
+		time.sleep(0.5)
+		controller.close()
+
+	def subscribe(self, vent_addr, sink_addr):
+		ctx = zmq.Context()
+
+		controller = ctx.socket(zmq.PUB)
+		controller.connect('tcp://*:%s')
+		request = ['1', vent_addr, sink_addr]
+		controller.send_multipart(request)
 		time.sleep(0.5)
 		controller.close()
 
@@ -125,7 +136,7 @@ class ImgPlusClient(object):
 		connections = []
 
 		controller = ctx.socket(zmq.SUB)
-		controller.connect('tcp://localhost:%s' % self.control_port)
+		controller.bind('tcp://localhost:%s' % self.control_port)
 
 		poller.register(controller, zmq.POLLIN)
 
@@ -157,7 +168,7 @@ class ImgPlusClient(object):
 				if cmd == '0':
 					# if the command equals '0' then stop accepting work
 					break
-				else:
+				elif cmd == '1':
 					# otherwise, add a new set of addresses to the list
 					vent_addr = msg[1]
 					sink_addr = msg[2]
