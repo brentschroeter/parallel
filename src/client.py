@@ -7,7 +7,11 @@ import time
 import sys
 import thread
 import random
-import resource
+try:
+	import resource
+	R_MOD_PRESENT = True
+except:
+	R_MOD_PRESENT = False
 
 RETRIES = 3
 
@@ -16,7 +20,8 @@ class ImgPlusClient(object):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
 
-		resource.setrlimit(resource.RLIMIT_NOFILE, (500, -1))
+		if R_MOD_PRESENT:
+			resource.setrlimit(resource.RLIMIT_NOFILE, (500, -1))
 
 		self.vent_port = vent_port
 		self.sink_port = sink_port
@@ -87,8 +92,10 @@ class ImgPlusClient(object):
 					if not checklist[i.id][0]:
 						if checklist[i.id][1] > 0:
 							checklist[i.id][1] -= 1
-							print checklist[i.id][1]
-							sender.send(pickle.dumps(i))
+							try:
+								sender.send(pickle.dumps(i), zmq.NOBLOCK)
+							except zmq.core.error.ZMQError:
+								pass
 						else:
 							jobs_completed += 1
 
@@ -102,7 +109,7 @@ class ImgPlusClient(object):
 
 	def kill_worker(self, context=zmq.Context()):
 		controller = context.socket(zmq.PUB)
-		controller.connect('tcp://*:%s' % self.control_port)
+		controller.connect('tcp://localhost:%s' % self.control_port)
 		request = ['0']
 		controller.send_multipart(request)
 		time.sleep(0.5)
@@ -112,7 +119,7 @@ class ImgPlusClient(object):
 		ctx = zmq.Context()
 
 		controller = ctx.socket(zmq.PUB)
-		controller.connect('tcp://*:%s')
+		controller.connect('tcp://localhost:%s')
 		request = ['1', vent_addr, sink_addr]
 		controller.send_multipart(request)
 		time.sleep(0.5)
@@ -128,15 +135,13 @@ class ImgPlusClient(object):
 		return connections, poller
 
 	def work(self):
-		print 'Worker started.'
-
 		ctx = zmq.Context()
 
 		poller = zmq.Poller()
 		connections = []
 
 		controller = ctx.socket(zmq.SUB)
-		controller.bind('tcp://localhost:%s' % self.control_port)
+		controller.bind('tcp://*:%s' % self.control_port)
 
 		poller.register(controller, zmq.POLLIN)
 

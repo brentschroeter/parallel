@@ -2,15 +2,15 @@
 
 import time
 import sys
-import resource
 from client import ImgPlusClient
 
 CONTROL_PORT = 5000
 
 def main(vent_port, sink_port, ip_addrs):
-	addresses = {('tcp://localhost:%s' % vent_port): ('tcp://localhost:%s' % sink_port)}
+	#addresses = {('tcp://localhost:%s' % vent_port): ('tcp://localhost:%s' % sink_port)}
+	addresses = {}
 	for i in ip_addrs:
-		addresses[('tcp://%s:%s' % (i, vent_port)): ('tcp://%s:%s' % (i, sink_port))]
+		addresses[('tcp://%s:%s' % (i, vent_port))] = ('tcp://%s:%s' % (i, sink_port))
 	client = ImgPlusClient(vent_port, sink_port, CONTROL_PORT, addresses)
 
 	print 'Enter the command "push" (without quotes) to begin pushing jobs. Enter "kill" to kill the worker and client. Enter "subscribe [IP address]" to begin pulling from a client at the given IP address.'
