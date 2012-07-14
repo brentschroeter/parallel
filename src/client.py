@@ -33,7 +33,6 @@ class ImgPlusClient(object):
 		thread.start_new_thread(self.distribute, ())
 
 	def distribute(self):
-		print 'Distributing.'
 		ctx = zmq.Context()
 
 		#self.kill_worker(ctx)
@@ -47,6 +46,8 @@ class ImgPlusClient(object):
 		receiver.bind('tcp://*:%s' % self.sink_port)
 
 		time.sleep(0.5)
+
+		print 'Pushing jobs.'
 
 		max_timeout = 0
 		jobs = self.generate_jobs()
@@ -70,7 +71,7 @@ class ImgPlusClient(object):
 					if checklist.get(job_id) != None:
 						if not checklist[job_id][0]:
 							checklist[job_id][0] = True
-							print 'Task completed: %s' % job_id
+							print 'Job completed: %s' % job_id
 							jobs_completed += 1
 					else:
 						print 'Error: foreign job received.'

@@ -2,7 +2,7 @@
 
 import time
 import sys
-from distributor import ImgPlusClient
+from client import ImgPlusClient
 
 def main(starting_port, num_clients):
 	client_info = []
