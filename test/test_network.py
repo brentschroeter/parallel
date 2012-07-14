@@ -7,8 +7,8 @@ from client import ImgPlusClient
 CONTROL_PORT = 5000
 
 def main(vent_port, sink_port, ip_addrs):
-	#addresses = {('tcp://localhost:%s' % vent_port): ('tcp://localhost:%s' % sink_port)}
-	addresses = {}
+	addresses = {('tcp://localhost:%s' % vent_port): ('tcp://localhost:%s' % sink_port)}
+#	addresses = {}
 	for i in ip_addrs:
 		addresses[('tcp://%s:%s' % (i, vent_port))] = ('tcp://%s:%s' % (i, sink_port))
 	client = ImgPlusClient(vent_port, sink_port, CONTROL_PORT, addresses)
