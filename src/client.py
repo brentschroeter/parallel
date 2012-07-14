@@ -100,7 +100,7 @@ class ImgPlusClient(object):
 	def start_worker(self):
 		thread.start_new_thread(self.work, ())
 
-	def kill_worker(self, context):
+	def kill_worker(self, context=zmq.Context()):
 		controller = context.socket(zmq.PUB)
 		controller.bind('tcp://*:%s' % self.control_port)
 		controller.send('0')
