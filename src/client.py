@@ -67,10 +67,11 @@ class ImgPlusClient(object):
 				s = receiver.recv()
 				try:
 					job_id, result = pickle.loads(s)
-					if checklist.get(job_id):
-						checklist[job_id][0] = True
-						print 'Task completed: %s' % job_id
-						jobs_completed += 1
+					if checklist.get(job_id) != None:
+						if not checklist[job_id][0]:
+							checklist[job_id][0] = True
+							print 'Task completed: %s' % job_id
+							jobs_completed += 1
 					else:
 						print 'Error: foreign job received.'
 				except:
