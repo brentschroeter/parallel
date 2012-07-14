@@ -7,6 +7,7 @@ import time
 import sys
 import thread
 import random
+import resource
 
 RETRIES = 3
 
@@ -14,6 +15,8 @@ class ImgPlusClient(object):
 	def __init__(self, vent_port, sink_port, control_port, addresses):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
+
+		resource.setrlimit(resource.RLIMIT_NOFILE, (500, -1))
 
 		self.vent_port = vent_port
 		self.sink_port = sink_port
@@ -115,6 +118,7 @@ class ImgPlusClient(object):
 
 	def work(self):
 		print 'Worker started.'
+
 		ctx = zmq.Context()
 
 		poller = zmq.Poller()
