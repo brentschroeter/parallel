@@ -17,105 +17,16 @@ except:
 
 RETRIES = 3
 
-class ImgPlusClient(object):
-	def __init__(self, vent_port, sink_port, control_port, addresses):
+class ImgPlusWorker(object):
+	def __init__(self, control_port, addresses):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
 
 		if R_MOD_PRESENT:
 			resource.setrlimit(resource.RLIMIT_NOFILE, (500, -1))
 
-		self.vent_port = vent_port
-		self.sink_port = sink_port
 		self.control_port = control_port
 		self.addresses = addresses
-
-		self.start_worker()
-
-	def generate_tasks(self):
-		tasks = []
-		for i in range(1000):
-			new_task = tasks.WaitTask(random.randint(399, 499))
-			tasks.append(new_task)
-		return tasks
-
-	def start_distribution(self):
-		thread.start_new_thread(self.distribute, ())
-
-	def distribute(self):
-		ctx = zmq.Context()
-
-		#self.kill_worker(ctx)
-
-		sender = ctx.socket(zmq.PUSH)
-		sender.bind('tcp://*:%s' % self.vent_port)
-
-		#import ipdb; ipdb.set_trace()
-
-		receiver = ctx.socket(zmq.PULL)
-		receiver.bind('tcp://*:%s' % self.sink_port)
-
-		time.sleep(0.5)
-
-		print 'Pushing tasks.'
-
-		max_timeout = 0
-		tasks = self.generate_tasks()
-		# every value in checklist takes the form (bool completed, int retries_left)
-		checklist = {}
-		for i in tasks:
-			max_timeout = max(max_timeout, i.req_timeout)
-			checklist[i.id] = [False, RETRIES]
-			sender.send(pickle.dumps(i))
-
-		poller = zmq.Poller()
-		poller.register(receiver, zmq.POLLIN)
-		tasks_completed = 0
-		# WARNING: potential for infinite loop
-		while tasks_completed < len(tasks):
-			socks = dict(poller.poll(max_timeout))
-			if socks.get(receiver) == zmq.POLLIN:
-				s = receiver.recv()
-				try:
-					task_id, result = pickle.loads(s)
-					if checklist.get(task_id) != None:
-						if not checklist[task_id][0]:
-							checklist[task_id][0] = True
-							print 'task completed: %s' % task_id
-							tasks_completed += 1
-					else:
-						print 'Error: foreign task received.'
-				except:
-					print 'Error: response not pickled.'
-					tasks_completed += 1
-			else:
-				print 'Error: timed out, retrying.'
-				for i in tasks:
-					if not checklist[i.id][0]:
-						if checklist[i.id][1] > 0:
-							checklist[i.id][1] -= 1
-							try:
-								sender.send(pickle.dumps(i), zmq.NOBLOCK)
-							except zmq.core.error.ZMQError:
-								pass
-						else:
-							tasks_completed += 1
-
-		sender.close()
-		receiver.close()
-
-		#self.start_worker()
-
-	def start_worker(self):
-		thread.start_new_thread(self.work, ())
-
-	def kill_worker(self, context=zmq.Context()):
-		controller = context.socket(zmq.PUB)
-		controller.connect('tcp://localhost:%s' % self.control_port)
-		request = ['0']
-		controller.send_multipart(request)
-		time.sleep(0.5)
-		controller.close()
 
 	def subscribe(self, vent_addr, sink_addr):
 		ctx = zmq.Context()
@@ -182,3 +93,102 @@ class ImgPlusClient(object):
 
 					self.addresses[vent_addr] = sink_addr
 					connections, poller = self.add_receiver(ctx, connections, poller, vent_addr)
+
+
+class ImgPlusClient(ImgPlusWorker):
+	def __init__(self, vent_port, sink_port, control_port, addresses):
+		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
+			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
+
+		ImgPlusWorker.__init__(self, control_port, addresses)
+
+		self.vent_port = vent_port
+		self.sink_port = sink_port
+		self.control_port = control_port
+		self.addresses = addresses
+
+		self.start_worker()
+
+	def generate_tasks(self):
+		task_list = []
+		for i in range(1000):
+			new_task = tasks.WaitTask(random.randint(399, 499))
+			task_list.append(new_task)
+		return task_list
+
+	def start_distribution(self):
+		thread.start_new_thread(self.distribute, ())
+
+	def retry(self, task_list, checklist, tasks_completed, sender):
+		for i in task_list:
+			if not checklist[i.id][0]:
+				if checklist[i.id][1] > 0:
+					checklist[i.id][1] -= 1
+					try:
+						sender.send(pickle.dumps(i), zmq.NOBLOCK)
+					except zmq.core.error.ZMQError:
+						pass
+				else:
+					tasks_completed += 1
+		return checklist, tasks_completed
+
+	def distribute(self):
+		ctx = zmq.Context()
+
+		sender = ctx.socket(zmq.PUSH)
+		sender.bind('tcp://*:%s' % self.vent_port)
+
+		receiver = ctx.socket(zmq.PULL)
+		receiver.bind('tcp://*:%s' % self.sink_port)
+
+		time.sleep(0.5)
+
+		print 'Pushing tasks.'
+
+		max_timeout = 0
+		task_list = self.generate_tasks()
+		# every value in checklist takes the form [bool completed, int retries_left]
+		checklist = {}
+		for i in task_list:
+			max_timeout = max(max_timeout, i.req_timeout)
+			checklist[i.id] = [False, RETRIES]
+			sender.send(pickle.dumps(i))
+
+		poller = zmq.Poller()
+		poller.register(receiver, zmq.POLLIN)
+		tasks_completed = 0
+
+		# WARNING: potential for infinite loop
+		while tasks_completed < len(task_list):
+			socks = dict(poller.poll(max_timeout))
+			if socks.get(receiver) == zmq.POLLIN:
+				s = receiver.recv()
+				try:
+					task_id, result = pickle.loads(s)
+					if checklist.get(task_id) != None:
+						if not checklist[task_id][0]:
+							checklist[task_id][0] = True
+							print 'task completed: %s' % task_id
+							tasks_completed += 1
+					else:
+						print 'Error: foreign task received.'
+				except IndexError:
+					print 'Error: Response not pickled.'
+					tasks_completed += 1
+			else:
+				print 'Error: Response timed out. Retrying.'
+				checklist, tasks_completed = self.retry(task_list, checklist, tasks_completed, sender)
+
+		sender.close()
+		receiver.close()
+
+	def start_worker(self):
+		thread.start_new_thread(self.work, ())
+
+	def kill_worker(self, context=zmq.Context()):
+		controller = context.socket(zmq.PUB)
+		controller.connect('tcp://localhost:%s' % self.control_port)
+		request = ['0']
+		controller.send_multipart(request)
+		time.sleep(0.5)
+		controller.close()
