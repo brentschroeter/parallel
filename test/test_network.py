@@ -2,7 +2,7 @@
 
 import time
 import sys
-from client import ImgPlusClient
+import parallel
 
 CONTROL_PORT = 5000
 
@@ -11,7 +11,7 @@ def main(vent_port, sink_port, ip_addrs):
 #	addresses = {}
 	for i in ip_addrs:
 		addresses[('tcp://%s:%s' % (i, vent_port))] = ('tcp://%s:%s' % (i, sink_port))
-	client = ImgPlusClient(vent_port, sink_port, CONTROL_PORT, addresses)
+	client = parallel.ParallelClient(vent_port, sink_port, CONTROL_PORT, addresses)
 
 	print 'Enter the command "push" (without quotes) to begin pushing tasks. Enter "kill" to kill the worker and client. Enter "subscribe [IP address]" to begin pulling from a client at the given IP address.'
 

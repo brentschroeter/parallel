@@ -17,7 +17,7 @@ except:
 
 RETRIES = 3
 
-class ImgPlusWorker(object):
+class ParallelWorker(object):
 	def __init__(self, control_port, addresses):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
@@ -94,13 +94,12 @@ class ImgPlusWorker(object):
 					self.addresses[vent_addr] = sink_addr
 					connections, poller = self.add_receiver(ctx, connections, poller, vent_addr)
 
-
-class ImgPlusClient(ImgPlusWorker):
+class ParallelClient(ParallelWorker):
 	def __init__(self, vent_port, sink_port, control_port, addresses):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
 
-		ImgPlusWorker.__init__(self, control_port, addresses)
+		ParallelWorker.__init__(self, control_port, addresses)
 
 		self.vent_port = vent_port
 		self.sink_port = sink_port

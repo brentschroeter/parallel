@@ -2,7 +2,7 @@
 
 import time
 import sys
-from client import ImgPlusClient
+import parallel
 
 def main(starting_port, num_clients):
 	client_info = []
@@ -17,7 +17,7 @@ def main(starting_port, num_clients):
 
 	clients = []
 	for i in client_info:
-		clients.append(ImgPlusClient(i[0], i[1], i[2], addresses))
+		clients.append(ParallelClient(i[0], i[1], i[2], addresses))
 
 	time.sleep(5)
 
