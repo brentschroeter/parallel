@@ -6,7 +6,7 @@ Parallel task processing using Python and ZeroMQ.
 Overview
 -------------
 
-Every ParallelClient object launches a new worker on a new thread that connects to a provided list of addresses (which includes the client's own address) to listen for work. Every ParallelClient object also has the ability to push jobs to any connected workers.
+Every ParallelClient object launches a ParallelWorker on a different thread that connects to a provided list of addresses (which includes the client's own address) in order to listen for work. If more than one CPU core is available, more ParallelWorkers will be created. Every ParallelClient object has the ability to push jobs to connected workers.
 
 Testing on One Machine
 -------------------
