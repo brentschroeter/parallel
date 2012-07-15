@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Created by Brent Schroeter with Luke Carmichael.
+
 import zmq
 import pickle
 import tasks
