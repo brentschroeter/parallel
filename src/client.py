@@ -105,7 +105,6 @@ class ImgPlusClient(ImgPlusWorker):
 		self.vent_port = vent_port
 		self.sink_port = sink_port
 		self.control_port = control_port
-		self.addresses = addresses
 
 		self.start_worker()
 
