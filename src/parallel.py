@@ -8,6 +8,11 @@ import tasks
 import time
 import sys
 import thread
+try:
+	from multiprocessing import cpu_count
+	PROCESSING_MOD_PRESENT = True
+except:
+	PROCESSING_MOD_PRESENT = False
 import random
 try:
 	import resource
@@ -28,11 +33,23 @@ class ParallelWorker(object):
 		self.control_port = control_port
 		self.addresses = addresses
 
+	def start_worker(self):
+		thread.start_new_thread(self.work, ())
+
+	def kill_worker(self, context=zmq.Context()):
+		controller = context.socket(zmq.PUB)
+		controller.bind('tcp://*:%s' % self.control_port)
+		request = ['0']
+		controller.send_multipart(request)
+		time.sleep(0.5)
+		controller.close()
+		time.sleep(0.2)
+
 	def subscribe(self, vent_addr, sink_addr):
 		ctx = zmq.Context()
 
 		controller = ctx.socket(zmq.PUB)
-		controller.connect('tcp://localhost:%s')
+		controller.bind('tcp://*:%s')
 		request = ['1', vent_addr, sink_addr]
 		controller.send_multipart(request)
 		time.sleep(0.5)
@@ -54,7 +71,7 @@ class ParallelWorker(object):
 		connections = []
 
 		controller = ctx.socket(zmq.SUB)
-		controller.bind('tcp://*:%s' % self.control_port)
+		controller.connect('tcp://localhost:%s' % self.control_port)
 
 		poller.register(controller, zmq.POLLIN)
 
@@ -94,18 +111,26 @@ class ParallelWorker(object):
 					self.addresses[vent_addr] = sink_addr
 					connections, poller = self.add_receiver(ctx, connections, poller, vent_addr)
 
-class ParallelClient(ParallelWorker):
+class ParallelClient(object):
 	def __init__(self, vent_port, sink_port, control_port, addresses):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
 
-		ParallelWorker.__init__(self, control_port, addresses)
-
+		self.addresses = addresses
 		self.vent_port = vent_port
 		self.sink_port = sink_port
 		self.control_port = control_port
 
-		self.start_worker()
+		if PROCESSING_MOD_PRESENT:
+			num_cpus = cpu_count()
+		else:
+			num_cpus = 1
+
+		self.workers = []
+		for i in range(num_cpus):
+			new_worker = ParallelWorker(control_port, addresses)
+			new_worker.start_worker()
+			self.workers.append(new_worker)
 
 	def generate_tasks(self):
 		task_list = []
@@ -180,13 +205,6 @@ class ParallelClient(ParallelWorker):
 		sender.close()
 		receiver.close()
 
-	def start_worker(self):
-		thread.start_new_thread(self.work, ())
-
-	def kill_worker(self, context=zmq.Context()):
-		controller = context.socket(zmq.PUB)
-		controller.connect('tcp://localhost:%s' % self.control_port)
-		request = ['0']
-		controller.send_multipart(request)
-		time.sleep(0.5)
-		controller.close()
+	def kill_workers(self):
+		for i in self.workers:
+			i.kill_worker()

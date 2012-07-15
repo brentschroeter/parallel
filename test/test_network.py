@@ -18,7 +18,7 @@ def main(vent_port, sink_port, ip_addrs):
 	while True:
 		usr_in = raw_input('> ')
 		if usr_in == 'kill':
-			client.kill_worker()
+			client.kill_workers()
 			break
 		elif usr_in == 'push':
 			client.distribute()
