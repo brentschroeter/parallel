@@ -30,12 +30,12 @@ class ImgPlusClient(object):
 
 		self.start_worker()
 
-	def generate_jobs(self):
-		jobs = []
+	def generate_tasks(self):
+		tasks = []
 		for i in range(1000):
-			new_job = tasks.WaitTask(random.randint(399, 499))
-			jobs.append(new_job)
-		return jobs
+			new_task = tasks.WaitTask(random.randint(399, 499))
+			tasks.append(new_task)
+		return tasks
 
 	def start_distribution(self):
 		thread.start_new_thread(self.distribute, ())
@@ -55,40 +55,40 @@ class ImgPlusClient(object):
 
 		time.sleep(0.5)
 
-		print 'Pushing jobs.'
+		print 'Pushing tasks.'
 
 		max_timeout = 0
-		jobs = self.generate_jobs()
+		tasks = self.generate_tasks()
 		# every value in checklist takes the form (bool completed, int retries_left)
 		checklist = {}
-		for i in jobs:
+		for i in tasks:
 			max_timeout = max(max_timeout, i.req_timeout)
 			checklist[i.id] = [False, RETRIES]
 			sender.send(pickle.dumps(i))
 
 		poller = zmq.Poller()
 		poller.register(receiver, zmq.POLLIN)
-		jobs_completed = 0
+		tasks_completed = 0
 		# WARNING: potential for infinite loop
-		while jobs_completed < len(jobs):
+		while tasks_completed < len(tasks):
 			socks = dict(poller.poll(max_timeout))
 			if socks.get(receiver) == zmq.POLLIN:
 				s = receiver.recv()
 				try:
-					job_id, result = pickle.loads(s)
-					if checklist.get(job_id) != None:
-						if not checklist[job_id][0]:
-							checklist[job_id][0] = True
-							print 'Job completed: %s' % job_id
-							jobs_completed += 1
+					task_id, result = pickle.loads(s)
+					if checklist.get(task_id) != None:
+						if not checklist[task_id][0]:
+							checklist[task_id][0] = True
+							print 'task completed: %s' % task_id
+							tasks_completed += 1
 					else:
-						print 'Error: foreign job received.'
+						print 'Error: foreign task received.'
 				except:
 					print 'Error: response not pickled.'
-					jobs_completed += 1
+					tasks_completed += 1
 			else:
 				print 'Error: timed out, retrying.'
-				for i in jobs:
+				for i in tasks:
 					if not checklist[i.id][0]:
 						if checklist[i.id][1] > 0:
 							checklist[i.id][1] -= 1
@@ -97,7 +97,7 @@ class ImgPlusClient(object):
 							except zmq.core.error.ZMQError:
 								pass
 						else:
-							jobs_completed += 1
+							tasks_completed += 1
 
 		sender.close()
 		receiver.close()
@@ -154,10 +154,10 @@ class ImgPlusClient(object):
 			for i in connections:
 				if socks.get(i[0]) == zmq.POLLIN:
 					s = i[0].recv()
-					job = pickle.loads(s)
+					task = pickle.loads(s)
 
-					result = job.run()
-					request = (job.id, result)
+					result = task.run()
+					request = (task.id, result)
 
 					if i[1] == None:
 						sender = ctx.socket(zmq.PUSH)

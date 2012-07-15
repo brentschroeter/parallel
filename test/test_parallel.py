@@ -2,11 +2,9 @@
 
 import time
 import sys
-import resource
 from client import ImgPlusClient
 
 def main(starting_port, num_clients):
-#	resource.setrlimit(resource.RLIMIT_NOFILE, (500, -1))
 	client_info = []
 
 	port = starting_port
