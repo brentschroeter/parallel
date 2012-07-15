@@ -206,5 +206,11 @@ class ParallelClient(object):
 		receiver.close()
 
 	def kill_workers(self):
-		for i in self.workers:
-			i.kill_worker()
+		ctx = zmq.Context()
+
+		controller = ctx.socket(zmq.PUB)
+		controller.bind('tcp://*:%s' % self.control_port)
+		request = ['0']
+		controller.send_multipart(request)
+		time.sleep(0.5)
+		controller.close()
