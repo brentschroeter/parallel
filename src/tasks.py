@@ -20,11 +20,3 @@ class WaitTask(Task):
 	def run(self):
 		time.sleep(float(self.wait_time) * 0.001)
 		return 1
-
-class ImageJob(Task):
-	def __init__(self, data):
-		super(WaitTask, self).__init__()
-		self.data = data
-
-	def run(self):
-		return len(data)
