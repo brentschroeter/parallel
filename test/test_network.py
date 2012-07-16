@@ -7,10 +7,6 @@ import parallel
 CONTROL_PORT = 5000
 
 def main():
-#	addresses = {('tcp://localhost:%s' % vent_port): ('tcp://localhost:%s' % sink_port)}
-#	addresses = {}
-#	for i in ip_addrs:
-#		addresses[('tcp://%s:%s' % (i, vent_port))] = ('tcp://%s:%s' % (i, sink_port))
 	client = parallel.ParallelClient()
 
 	print 'Enter the command "push" (without quotes) to begin pushing tasks. Enter "kill" to kill the worker and client. Enter "subscribe [IP address]" to begin pulling from a client at the given IP address.'
