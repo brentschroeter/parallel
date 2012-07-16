@@ -65,6 +65,7 @@ class ParallelWorker(object):
 
 		controller = ctx.socket(zmq.SUB)
 		controller.connect('tcp://localhost:%s' % self.control_port)
+		controller.setsockopt(zmq.SUBSCRIBE, '')
 
 		poller.register(controller, zmq.POLLIN)
 
@@ -204,11 +205,13 @@ class ParallelClient(object):
 		receiver.close()
 
 	def kill_workers(self):
+		''' Gracefully kill workers. '''
 		ctx = zmq.Context()
 
 		try:
 			controller = ctx.socket(zmq.PUB)
 			controller.bind('tcp://*:%s' % self.control_port)
+			time.sleep(0.5)
 			request = ['0']
 			controller.send_multipart(request)
 			time.sleep(0.5)
@@ -222,6 +225,7 @@ class ParallelClient(object):
 		try:
 			controller = ctx.socket(zmq.PUB)
 			controller.bind('tcp://*:%s' % self.control_port)
+			time.sleep(0.5)
 			self.addresses[vent_addr] = sink_addr
 			request = ['1', vent_addr, sink_addr]
 			controller.send_multipart(request)
@@ -253,7 +257,7 @@ class ParallelClient(object):
 				continue
 			new_sink_addr = 'tcp://%s:%s' % (new_addr, self.sink_port)
 			self.subscribe(new_vent_addr, new_sink_addr)
-			print 'New client: %s\n> ' % new_addr
+			print 'New client: %s' % new_addr
 
 	def broadcast_address(self, mcast_grp='228.3.9.7', mcast_port=5003):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
