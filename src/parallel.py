@@ -8,6 +8,8 @@ import tasks
 import time
 import sys
 import thread
+import socket
+import struct
 try:
 	from multiprocessing import cpu_count
 	PROCESSING_MOD_PRESENT = True
@@ -23,7 +25,7 @@ except:
 RETRIES = 3
 
 class ParallelWorker(object):
-	def __init__(self, control_port, addresses):
+	def __init__(self, addresses, control_port=5000):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
 
@@ -36,24 +38,14 @@ class ParallelWorker(object):
 	def start_worker(self):
 		thread.start_new_thread(self.work, ())
 
-	def kill_worker(self, context=zmq.Context()):
-		controller = context.socket(zmq.PUB)
-		controller.bind('tcp://*:%s' % self.control_port)
-		request = ['0']
-		controller.send_multipart(request)
-		time.sleep(0.5)
-		controller.close()
-		time.sleep(0.2)
-
-	def subscribe(self, vent_addr, sink_addr):
-		ctx = zmq.Context()
-
-		controller = ctx.socket(zmq.PUB)
-		controller.bind('tcp://*:%s')
-		request = ['1', vent_addr, sink_addr]
-		controller.send_multipart(request)
-		time.sleep(0.5)
-		controller.close()
+#	def kill_worker(self, context=zmq.Context()):
+#		controller = context.socket(zmq.PUB)
+#		controller.bind('tcp://*:%s' % self.control_port)
+#		request = ['0']
+#		controller.send_multipart(request)
+#		time.sleep(0.5)
+#		controller.close()
+#		time.sleep(0.2)
 
 	def add_receiver(self, context, connections, poller, addr):
 		receiver = context.socket(zmq.PULL)
@@ -112,11 +104,11 @@ class ParallelWorker(object):
 					connections, poller = self.add_receiver(ctx, connections, poller, vent_addr)
 
 class ParallelClient(object):
-	def __init__(self, vent_port, sink_port, control_port, addresses):
+	def __init__(self, vent_port=5001, sink_port=5002, control_port=5000):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
 
-		self.addresses = addresses
+		self.addresses = {'tcp://localhost:%s' % vent_port: 'tcp://localhost:%s' % sink_port}
 		self.vent_port = vent_port
 		self.sink_port = sink_port
 		self.control_port = control_port
@@ -128,9 +120,12 @@ class ParallelClient(object):
 
 		self.workers = []
 		for i in range(num_cpus):
-			new_worker = ParallelWorker(control_port, addresses)
+			new_worker = ParallelWorker(self.addresses, control_port)
 			new_worker.start_worker()
 			self.workers.append(new_worker)
+
+		thread.start_new_thread(self.broadcast_address, ())
+		thread.start_new_thread(self.listen_for_clients, ())
 
 	def generate_tasks(self):
 		task_list = []
@@ -197,7 +192,6 @@ class ParallelClient(object):
 						print 'Error: foreign task received.'
 				except IndexError:
 					print 'Error: Response not pickled.'
-					tasks_completed += 1
 			else:
 				print 'Error: Response timed out. Retrying.'
 				checklist, tasks_completed = self.retry(task_list, checklist, tasks_completed, sender)
@@ -208,9 +202,64 @@ class ParallelClient(object):
 	def kill_workers(self):
 		ctx = zmq.Context()
 
-		controller = ctx.socket(zmq.PUB)
-		controller.bind('tcp://*:%s' % self.control_port)
-		request = ['0']
-		controller.send_multipart(request)
-		time.sleep(0.5)
-		controller.close()
+		try:
+			controller = ctx.socket(zmq.PUB)
+			controller.bind('tcp://*:%s' % self.control_port)
+			request = ['0']
+			controller.send_multipart(request)
+			time.sleep(0.5)
+			controller.close()
+		except zmq.core.error.ZMQError:
+			pass
+
+	def subscribe(self, vent_addr, sink_addr):
+		ctx = zmq.Context()
+
+		try:
+			controller = ctx.socket(zmq.PUB)
+			controller.bind('tcp://*:%s')
+			self.addresses[vent_addr] = sink_addr
+			request = ['1', vent_addr, sink_addr]
+			controller.send_multipart(request)
+			time.sleep(0.5)
+			controller.close()
+		except zmq.core.error.ZMQError:
+			pass
+
+	def listen_for_clients(self, mcast_grp='228.3.9.7', mcast_port=5003):
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		sock.bind(('', mcast_port))
+		mreq = struct.pack('4sl', socket.inet_aton(mcast_grp), socket.INADDR_ANY)
+
+		sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+		while True:
+			try:
+				my_addr = socket.gethostbyname(socket.getfqdn())
+			except:
+				my_addr = socket.gethostbyname(socket.gethostname())
+			s = sock.recv(10240)
+			msg = s.split()
+			if len(msg) != 2 or msg[0] != 'pl_ping' or msg[1] == my_addr:
+				continue
+			new_addr = msg[1]
+			new_vent_addr = 'tcp://%s:%s' % (new_addr, self.vent_port)
+			if new_vent_addr in self.addresses:
+				continue
+			new_sink_addr = 'tcp://%s:%s' % (new_addr, self.sink_port)
+			self.subscribe(new_vent_addr, new_sink_addr)
+			print 'New client: %s' % new_addr
+
+	def broadcast_address(self, mcast_grp='228.3.9.7', mcast_port=5003):
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+		sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+
+		while True:
+			try:
+				my_addr = socket.gethostbyname(socket.getfqdn())
+			except:
+				my_addr = socket.gethostbyname(socket.gethostname())
+			msg = 'pl_ping %s' % my_addr
+			sock.sendto(msg, (mcast_grp, mcast_port))
+			time.sleep(2)
