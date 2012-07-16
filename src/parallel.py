@@ -253,7 +253,7 @@ class ParallelClient(object):
 				continue
 			new_sink_addr = 'tcp://%s:%s' % (new_addr, self.sink_port)
 			self.subscribe(new_vent_addr, new_sink_addr)
-			print 'New client: %s' % new_addr
+			print 'New client: %s\n> ' % new_addr
 
 	def broadcast_address(self, mcast_grp='228.3.9.7', mcast_port=5003):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
