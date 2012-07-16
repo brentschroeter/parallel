@@ -1,7 +1,7 @@
 Parallel
 ========
 
-Parallel task processing using Python and ZeroMQ.
+The Parallel project allows for easy parallel processing on networked clients and on multi-core machines.
 
 Overview
 -------------
