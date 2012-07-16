@@ -217,7 +217,7 @@ class ParallelClient(object):
 
 		try:
 			controller = ctx.socket(zmq.PUB)
-			controller.bind('tcp://*:%s')
+			controller.bind('tcp://*:%s' % self.control_port)
 			self.addresses[vent_addr] = sink_addr
 			request = ['1', vent_addr, sink_addr]
 			controller.send_multipart(request)
