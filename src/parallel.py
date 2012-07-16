@@ -3,6 +3,7 @@
 # Created by Brent Schroeter with Luke Carmichael.
 
 import zmq
+from zmq.core.error import ZMQError
 import pickle
 import tasks
 import time
@@ -86,7 +87,10 @@ class ParallelWorker(object):
 						sender.connect(self.addresses[i[2]])
 						i[1] = sender
 
-					i[1].send(pickle.dumps(request))
+					try:
+						i[1].send(pickle.dumps(request), zmq.NOBLOCK)
+					except ZMQError:
+						pass
 
 			if socks.get(controller) == zmq.POLLIN:
 				msg = controller.recv_multipart()
@@ -144,7 +148,7 @@ class ParallelClient(object):
 					checklist[i.id][1] -= 1
 					try:
 						sender.send(pickle.dumps(i), zmq.NOBLOCK)
-					except zmq.core.error.ZMQError:
+					except ZMQError:
 						pass
 				else:
 					tasks_completed += 1
@@ -209,7 +213,7 @@ class ParallelClient(object):
 			controller.send_multipart(request)
 			time.sleep(0.5)
 			controller.close()
-		except zmq.core.error.ZMQError:
+		except ZMQError:
 			pass
 
 	def subscribe(self, vent_addr, sink_addr):
@@ -223,7 +227,7 @@ class ParallelClient(object):
 			controller.send_multipart(request)
 			time.sleep(0.5)
 			controller.close()
-		except zmq.core.error.ZMQError:
+		except ZMQError:
 			pass
 
 	def listen_for_clients(self, mcast_grp='228.3.9.7', mcast_port=5003):
