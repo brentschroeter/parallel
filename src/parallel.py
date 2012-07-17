@@ -100,7 +100,7 @@ class ParallelWorker(object):
 					connections, poller = self.add_receiver(ctx, connections, poller, vent_addr)
 
 class ParallelClient(object):
-	def __init__(self, vent_port=5001, sink_port=5002, control_port=5000):
+	def __init__(self, vent_port=5001, sink_port=5002, control_port=5000, mcast_grp='228.3.9.7', mcast_port=5003):
 		''' Parameter 'addresses' is a dictionary of sinks referenced to ventilators.
 			Parameter 'control_port' represents a port that can command the worker to stop accepting work or add a new set of addresses to its list. '''
 
@@ -108,6 +108,8 @@ class ParallelClient(object):
 		self.vent_port = vent_port
 		self.sink_port = sink_port
 		self.control_port = control_port
+		self.mcast_grp = mcast_grp
+		self.mcast_port = mcast_port
 
 		if PROCESSING_MOD_PRESENT:
 			num_cpus = cpu_count()
@@ -225,11 +227,11 @@ class ParallelClient(object):
 		except ZMQError:
 			pass
 
-	def listen_for_clients(self, mcast_grp='228.3.9.7', mcast_port=5003):
+	def listen_for_clients(self):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 		sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-		sock.bind(('', mcast_port))
-		mreq = struct.pack('4sl', socket.inet_aton(mcast_grp), socket.INADDR_ANY)
+		sock.bind(('', self.mcast_port))
+		mreq = struct.pack('4sl', socket.inet_aton(self.mcast_grp), socket.INADDR_ANY)
 
 		sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 
@@ -250,7 +252,7 @@ class ParallelClient(object):
 			self.subscribe(new_vent_addr, new_sink_addr)
 			print 'New client: %s' % new_addr
 
-	def broadcast_address(self, mcast_grp='228.3.9.7', mcast_port=5003):
+	def broadcast_address(self):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
 		sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
 
@@ -260,7 +262,7 @@ class ParallelClient(object):
 			except:
 				my_addr = socket.gethostbyname(socket.gethostname())
 			msg = 'pl_ping %s' % my_addr
-			sock.sendto(msg, (mcast_grp, mcast_port))
+			sock.sendto(msg, (self.mcast_grp, self.mcast_port))
 			time.sleep(2)
 
 	def restart_workers(self):
