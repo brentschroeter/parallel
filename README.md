@@ -11,4 +11,4 @@ Every ParallelClient object launches a ParallelWorker on a different thread that
 Testing on Many Machines
 ----------------------------------
 
-Make sure that all of the computers are networked and that any firewalls are down. Install ZeroMQ and fire up `./test_network.py` on each computer. Each computer now has a worker running and is awaiting commands. Type `push` at the prompt on any computer to begin pushing jobs. Each job sleeps for about a half of a second and then returns 1.
+Make sure that all of the computers are networked and that all firewalls are configured correctly. **This could mean disabling the firewall completely.** Install ZeroMQ and fire up `./test_network.py` on each computer. Each computer now has a worker running and is awaiting commands. Type `push` at the prompt on any computer to begin pushing jobs. Each job sleeps for about a half of a second and then returns 1.
