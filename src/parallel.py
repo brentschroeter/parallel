@@ -39,15 +39,6 @@ class ParallelWorker(object):
 	def start_worker(self):
 		thread.start_new_thread(self.work, ())
 
-#	def kill_worker(self, context=zmq.Context()):
-#		controller = context.socket(zmq.PUB)
-#		controller.bind('tcp://*:%s' % self.control_port)
-#		request = ['0']
-#		controller.send_multipart(request)
-#		time.sleep(0.5)
-#		controller.close()
-#		time.sleep(0.2)
-
 	def add_receiver(self, context, connections, poller, addr):
 		receiver = context.socket(zmq.PULL)
 		receiver.connect(addr)
@@ -271,3 +262,8 @@ class ParallelClient(object):
 			msg = 'pl_ping %s' % my_addr
 			sock.sendto(msg, (mcast_grp, mcast_port))
 			time.sleep(2)
+
+	def restart_workers(self):
+		self.kill_workers()
+		for i in self.workers:
+			i.start_worker()
