@@ -20,7 +20,7 @@ class WaitTask(Task):
 		time.sleep(float(self.wait_time) * 0.001)
 		return 1
 
-class ImgTask(Task):
+class LiteImgTask(Task):
 	def __init__(self, img_path, req_timeout=5000):
 		Task.__init__(self, req_timeout)
 		self.img_path = img_path
