@@ -3,22 +3,45 @@
 import time
 import sys
 import parallel
-
-CONTROL_PORT = 5000
+import tasks
+import random
 
 def main():
-	client = parallel.ParallelClient()
+	worker_pool = []
+	print 'Enter the IP addresses of other clients. Enter "done" to finish.'
+	address = 'localhost'
+	while address != 'done':
+		worker_pool.append(address)
+		address = raw_input('Address: ')
 
-	print 'Enter the command "push" (without quotes) to begin pushing tasks. Enter "kill" to kill the worker and client.'
+	print ''
+	print 'Commands:'
+	print 'work: Accept work from other clients.'
+	print 'push: Generate and push jobs.'
+	print 'quit: Quit.'
+	print ''
 
 	while True:
-		usr_in = raw_input('> ')
-		if usr_in == 'kill':
-			client.kill_workers()
+		cmd = raw_input('Command: ')
+		if cmd == 'work':
+			parallel.accept_work(worker_pool)
+		elif cmd == 'push':
+			push_jobs()
+		elif cmd == 'quit':
 			break
-		elif usr_in == 'push':
-			client.distribute()
 		else:
 			print 'Command not recognized.'
+
+def push_jobs():
+	jobs = []
+	for i in range(1000):
+		jobs.append(tasks.WaitTask(random.randint(300, 500)))
+	job_ids = parallel.run_jobs(jobs)
+	finished_jobs = {}
+	for i in job_ids:
+		result = None
+		while result == None:
+			result = parallel.get_job(finished_jobs=finished_jobs)
+		print result
 
 main()
