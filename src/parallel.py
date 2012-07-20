@@ -13,6 +13,43 @@ VENT_PORT = '5000'
 SINK_PORT = '5001'
 CONNECTION_RETRIES = 5
 
+def get_vent():
+    context = zmq.Context()
+    sender = context.socket(zmq.PUSH)
+    for i in range(CONNECTION_RETRIES):
+        try:
+            sender.bind('tcp://*:%s' % VENT_PORT)
+            break
+        except ZMQError:
+            time.sleep(0.5)
+    else:
+        sender.close()
+        raise ZMQError('Could not bind socket.')
+    time.sleep(0.5)
+    return sender
+
+def get_sink():
+    context = zmq.Context()
+    receiver = context.socket(zmq.PULL)
+    for i in range(CONNECTION_RETRIES):
+        try:
+            receiver.bind('tcp://*:%s' % SINK_PORT)
+            break
+        except ZMQError:
+            time.sleep(0.5)
+    else:
+        sender.close()
+        raise ZMQError('Could not bind socket.')
+    time.sleep(0.5)
+    return receiver
+
+def close_vent(sender):
+    time.sleep(0.5)
+    sender.close()
+
+def close_sink(receiver):
+    receiver.close()
+
 def run_job(job, sender=None):
     job_id = str(uuid.uuid4())
     msg = [job_id, pickle.dumps(job)]
@@ -33,43 +70,6 @@ def run_jobs(jobs):
         job_ids.append(run_job(i, sender))
     close_vent(sender)
     return job_ids
-
-def get_vent():
-    context = zmq.Context()
-    sender = context.socket(zmq.PUSH)
-    for i in range(CONNECTION_RETRIES):
-        try:
-            sender.bind('tcp://*:%s' % VENT_PORT)
-            break
-        except ZMQError:
-            time.sleep(0.5)
-    else:
-        sender.close()
-        raise ZMQError('Could not bind socket.')
-    time.sleep(0.5)
-    return sender
-
-def close_vent(sender):
-    time.sleep(0.5)
-    sender.close()
-
-def get_sink():
-    context = zmq.Context()
-    receiver = context.socket(zmq.PULL)
-    for i in range(CONNECTION_RETRIES):
-        try:
-            receiver.bind('tcp://*:%s' % SINK_PORT)
-            break
-        except ZMQError:
-            time.sleep(0.5)
-    else:
-        sender.close()
-        raise ZMQError('Could not bind socket.')
-    time.sleep(0.5)
-    return receiver
-
-def close_sink(receiver):
-    receiver.close()
 
 def get_job(job_id, callback=None, finished_jobs={}):
     if not job_id in finished_jobs:
