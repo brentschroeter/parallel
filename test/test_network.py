@@ -5,6 +5,7 @@ import sys
 import parallel
 import tasks
 import random
+from zmq.core.error import ZMQError
 
 def main():
 	worker_pool = []
@@ -24,7 +25,10 @@ def main():
 	while True:
 		cmd = raw_input('Command: ')
 		if cmd == 'work':
-			parallel.accept_work(worker_pool)
+			try:
+				parallel.accept_work(worker_pool)
+			except ZMQError as err:
+				print 'Error: %s' % err.strerror
 		elif cmd == 'push':
 			push_jobs()
 		elif cmd == 'quit':
@@ -41,7 +45,10 @@ def push_jobs():
 	for i in job_ids:
 		result = None
 		while result == None:
-			result = parallel.get_job(finished_jobs=finished_jobs)
+			try:
+				result = parallel.get_job(finished_jobs=finished_jobs)
+			except ZMQError as err:
+				print 'Error: %s' % err.strerror
 		print result
 
 main()

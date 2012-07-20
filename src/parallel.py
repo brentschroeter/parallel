@@ -11,6 +11,7 @@ import time
 
 VENT_PORT = '5000'
 SINK_PORT = '5001'
+RECONNECT_RETRIES = 5
 
 def run_job(job, sender=None):
     job_id = str(uuid.uuid4())
@@ -36,7 +37,15 @@ def run_jobs(jobs):
 def get_vent():
     context = zmq.Context()
     sender = context.socket(zmq.PUSH)
-    sender.bind('tcp://*:%s' % VENT_PORT)
+    for i in range(CONNECTION_RETRIES):
+        try:
+            sender.bind('tcp://*:%s' % VENT_PORT)
+            break
+        except ZMQError:
+            time.sleep(0.5)
+    else:
+        sender.close()
+        raise ZMQError('Could not bind socket.')
     time.sleep(0.5)
     return sender
 
@@ -47,7 +56,15 @@ def close_vent(sender):
 def get_sink():
     context = zmq.Context()
     receiver = context.socket(zmq.PULL)
-    receiver.bind('tcp://*:%s' % SINK_PORT)
+    for i in range(CONNECTION_RETRIES):
+        try:
+            receiver.bind('tcp://*:%s' % SINK_PORT)
+            break
+        except ZMQError:
+            time.sleep(0.5)
+    else:
+        sender.close()
+        raise ZMQError('Could not bind socket.')
     time.sleep(0.5)
     return receiver
 
@@ -78,26 +95,26 @@ def get_job(job_id=None, callback=None, finished_jobs={}):
     return None
 
 def accept_work(worker_pool):
-        context = zmq.Context()
-        poller = zmq.Poller()
-        connections = []
-        for i in worker_pool:
-            receiver = context.socket(zmq.PULL)
-            receiver.connect('tcp://%s:%s' % (i, VENT_PORT))
-            poller.register(receiver, zmq.POLLIN)
-            connections.append([i, receiver, None])
-        while True:
-            socks = dict(poller.poll())
-            for i in connections:
-                if socks.get(i[1]) == zmq.POLLIN:
-                    msg = i[1].recv_multipart()
-                    job_id = msg[0]
-                    job = pickle.loads(msg[1])
-                    result = job.run()
-                    result = pickle.dumps(result)
-                    request = [job_id, result]
-                    if i[2] == None:
-                        sender = context.socket(zmq.PUSH)
-                        sender.connect('tcp://%s:%s' % (i[0], SINK_PORT))
-                        i[2] = sender
-                    i[2].send_multipart(request)
+    context = zmq.Context()
+    poller = zmq.Poller()
+    connections = []
+    for i in worker_pool:
+        receiver = context.socket(zmq.PULL)
+        receiver.connect('tcp://%s:%s' % (i, VENT_PORT))
+        poller.register(receiver, zmq.POLLIN)
+        connections.append([i, receiver, None])
+    while True:
+        socks = dict(poller.poll())
+        for i in connections:
+            if socks.get(i[1]) == zmq.POLLIN:
+                msg = i[1].recv_multipart()
+                job_id = msg[0]
+                job = pickle.loads(msg[1])
+                result = job.run()
+                result = pickle.dumps(result)
+                request = [job_id, result]
+                if i[2] == None:
+                    sender = context.socket(zmq.PUSH)
+                    sender.connect('tcp://%s:%s' % (i[0], SINK_PORT))
+                    i[2] = sender
+                i[2].send_multipart(request)
