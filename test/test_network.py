@@ -46,7 +46,7 @@ def push_jobs():
 		result = None
 		while result == None:
 			try:
-				result = parallel.get_job(finished_jobs=finished_jobs)
+				result = parallel.get_job(i, finished_jobs=finished_jobs)
 			except ZMQError as err:
 				print 'Error: %s' % err.strerror
 		print result

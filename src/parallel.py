@@ -11,7 +11,7 @@ import time
 
 VENT_PORT = '5000'
 SINK_PORT = '5001'
-RECONNECT_RETRIES = 5
+CONNECTION_RETRIES = 5
 
 def run_job(job, sender=None):
     job_id = str(uuid.uuid4())
@@ -71,30 +71,31 @@ def get_sink():
 def close_sink(receiver):
     receiver.close()
 
-def get_job(job_id=None, callback=None, finished_jobs={}):
-    # open the receiver
-    receiver = get_sink()
-    # gather all completed jobs
-    while True:
-        try:
-            msg = receiver.recv_multipart(zmq.NOBLOCK)
-        except ZMQError:
-            break
-        tmp_id = msg[0]
-        tmp_result = pickle.loads(msg[1])
-        finished_jobs[tmp_id] = tmp_result
-        if callback:
-            callback(tmp_id, tmp_result)
-    # close the receiver
-    receiver.close()
+def get_job(job_id, callback=None, finished_jobs={}):
+    if not job_id in finished_jobs:
+        # open the receiver
+        receiver = get_sink()
+        # gather all completed jobs
+        while True:
+            try:
+                msg = receiver.recv_multipart(zmq.NOBLOCK)
+            except ZMQError:
+                break
+            tmp_id = msg[0]
+            tmp_result = pickle.loads(msg[1])
+            finished_jobs[tmp_id] = tmp_result
+            if callback:
+                callback(tmp_id, tmp_result)
+        # close the receiver
+        receiver.close()
     # if job with job_id is finished, return the job result
-    if job_id and job_id in finished_jobs:
+    if job_id in finished_jobs:
         result = finished_jobs[job_id]
         return result
     # otherwise, return None
     return None
 
-def accept_work(worker_pool):
+def accept_work(worker_pool, timeout=None):
     context = zmq.Context()
     poller = zmq.Poller()
     connections = []
@@ -104,7 +105,9 @@ def accept_work(worker_pool):
         poller.register(receiver, zmq.POLLIN)
         connections.append([i, receiver, None])
     while True:
-        socks = dict(poller.poll())
+        socks = dict(poller.poll(timeout))
+        if len(socks) == 0:
+            break
         for i in connections:
             if socks.get(i[1]) == zmq.POLLIN:
                 msg = i[1].recv_multipart()
@@ -118,3 +121,5 @@ def accept_work(worker_pool):
                     sender.connect('tcp://%s:%s' % (i[0], SINK_PORT))
                     i[2] = sender
                 i[2].send_multipart(request)
+    # Is this right?
+    context.destroy()

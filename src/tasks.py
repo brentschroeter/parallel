@@ -19,5 +19,4 @@ class WaitTask(Task):
 
 	def run(self):
 		time.sleep(float(self.wait_time) * 0.001)
-		print random.randint(0, 100)
 		return 'Slept for: %d ms' % self.wait_time
