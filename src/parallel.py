@@ -4,10 +4,10 @@
 
 import zmq
 import uuid
-from zmq.core.error import ZMQError
 import pickle
 import tasks
 import time
+from zmq.core.error import ZMQError
 
 VENT_PORT = '5000'
 SINK_PORT = '5001'
