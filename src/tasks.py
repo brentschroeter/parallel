@@ -5,6 +5,8 @@ import uuid
 import os
 import random
 
+# TODO use callables
+
 class Task(object):
 	def __init__(self, req_timeout=5000):
 		self.req_timeout = req_timeout

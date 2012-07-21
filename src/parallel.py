@@ -5,121 +5,69 @@
 import zmq
 import uuid
 import pickle
-import tasks
 import time
+import Queue
 from zmq.core.error import ZMQError
 
-VENT_PORT = '5000'
-SINK_PORT = '5001'
-CONNECTION_RETRIES = 5
+# TODO make these configurable
+VENT_PORT_DEFAULT = '5000'
+SINK_PORT_DEFAULT = '5001'
 
-def get_vent():
-    context = zmq.Context()
-    sender = context.socket(zmq.PUSH)
-    for i in range(CONNECTION_RETRIES):
-        try:
-            sender.bind('tcp://*:%s' % VENT_PORT)
-            break
-        except ZMQError:
-            time.sleep(0.5)
-    else:
-        sender.close()
-        raise ZMQError('Could not bind socket.')
+def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
+    vent_sender = context.socket(zmq.PUSH)
+    vent_sender.bind('tcp://*:%s' % vent_port)
     time.sleep(0.5)
-    return sender
-
-def get_sink():
-    context = zmq.Context()
-    receiver = context.socket(zmq.PULL)
-    for i in range(CONNECTION_RETRIES):
-        try:
-            receiver.bind('tcp://*:%s' % SINK_PORT)
-            break
-        except ZMQError:
-            time.sleep(0.5)
-    else:
-        sender.close()
-        raise ZMQError('Could not bind socket.')
-    time.sleep(0.5)
-    return receiver
-
-def close_vent(sender):
-    time.sleep(0.5)
-    sender.close()
-
-def close_sink(receiver):
-    receiver.close()
-
-def run_job(job, sender=None):
-    job_id = str(uuid.uuid4())
-    msg = [job_id, pickle.dumps(job)]
-    manual_close = False
-    if not sender:
-        manual_close = True
-        sender = get_vent()
-    sender.send_multipart(msg)
-    if manual_close:
-        close_vent(sender)
-    return job_id
-
-# for much faster pushing of multiple jobs
-def run_jobs(jobs):
-    job_ids = []
-    sender = get_vent()
-    for i in jobs:
-        job_ids.append(run_job(i, sender))
-    close_vent(sender)
-    return job_ids
-
-def get_job(job_id, callback=None, finished_jobs={}):
-    if not job_id in finished_jobs:
-        # open the receiver
-        receiver = get_sink()
-        # gather all completed jobs
+    poller = zmq.Poller()
+    sink_receiver = context.socket(zmq.PULL)
+    sink_receiver.bind('tcp://*:%s' % sink_port)
+    poller.register(sink_receiver, zmq.POLLIN)
+    connections = []
+    for address in addresses:
+        vent_addr = 'tcp://%s:%s' % (address, vent_port)
+        sink_addr = 'tcp://%s:%s' % (address, sink_port)
+        tmp_receiver = context.socket(zmq.PULL)
+        tmp_receiver.connect(vent_addr)
+        poller.register(tmp_receiver, zmq.POLLIN)
+        tmp_sender = context.socket(zmq.PUSH)
+        tmp_sender.connect(sink_addr)
+        connections.append((address, tmp_receiver, tmp_sender))
+    while True:
+        while not queue.empty():
+            job_tuple = queue.get()
+            vent_sender.send(pickle.dumps(job_tuple))
         while True:
             try:
-                msg = receiver.recv_multipart(zmq.NOBLOCK)
+                s = sink_receiver.recv(zmq.NOBLOCK)
+                result, job_id = pickle.loads(s)
+                callback(result, job_id)
             except ZMQError:
                 break
-            tmp_id = msg[0]
-            tmp_result = pickle.loads(msg[1])
-            finished_jobs[tmp_id] = tmp_result
-            if callback:
-                callback(tmp_id, tmp_result)
-        # close the receiver
-        receiver.close()
-    # if job with job_id is finished, return the job result
-    if job_id in finished_jobs:
-        result = finished_jobs[job_id]
-        return result
-    # otherwise, return None
-    return None
+        socks = dict(poller.poll(500))
+        for address, receiver, sender in connections:
+            if socks.get(receiver):
+                s = receiver.recv()
+                job, job_id = pickle.loads(s)
+                result = job()
+                reply = (result, job_id)
+                sender.send(pickle.dumps(reply))
 
-def accept_work(worker_pool, timeout=None):
+def construct_worker(addresses, config={}):
+    vent_port = config.get('vent_port', VENT_PORT_DEFAULT)
+    sink_port = config.get('sink_port', SINK_PORT_DEFAULT)
+
     context = zmq.Context()
-    poller = zmq.Poller()
-    connections = []
-    for i in worker_pool:
-        receiver = context.socket(zmq.PULL)
-        receiver.connect('tcp://%s:%s' % (i, VENT_PORT))
-        poller.register(receiver, zmq.POLLIN)
-        connections.append([i, receiver, None])
-    while True:
-        socks = dict(poller.poll(timeout))
-        if len(socks) == 0:
-            break
-        for i in connections:
-            if socks.get(i[1]) == zmq.POLLIN:
-                msg = i[1].recv_multipart()
-                job_id = msg[0]
-                job = pickle.loads(msg[1])
-                result = job.run()
-                result = pickle.dumps(result)
-                request = [job_id, result]
-                if i[2] == None:
-                    sender = context.socket(zmq.PUSH)
-                    sender.connect('tcp://%s:%s' % (i[0], SINK_PORT))
-                    i[2] = sender
-                i[2].send_multipart(request)
-    # Is this right?
-    context.destroy()
+    queue = Queue.Queue()
+
+    def worker(callback):
+        worker_loop(context, queue, addresses, callback, vent_port, sink_port)
+
+    def close():
+        # should we destroy???
+        context.destroy()
+
+    def run_job(job):
+        job_id = str(uuid.uuid4())
+        queue.put((job, job_id))
+        return job_id
+
+    return worker, close, run_job
