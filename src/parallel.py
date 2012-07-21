@@ -9,9 +9,30 @@ import time
 import Queue
 from zmq.core.error import ZMQError
 
-# TODO make these configurable
 VENT_PORT_DEFAULT = '5000'
 SINK_PORT_DEFAULT = '5001'
+
+def send_pending_jobs(queue, sender):
+    while not queue.empty():
+        job_tuple = queue.get()
+        sender.send(pickle.dumps(job_tuple))
+
+def process_job(receiver, sender):
+    s = receiver.recv()
+    job, job_id = pickle.loads(s)
+    result = job()
+    reply = (result, job_id)
+    sender.send(pickle.dumps(reply))
+
+def add_connection(context, poller, connections, address, vent_port, sink_port):
+    vent_addr = 'tcp://%s:%s' % (address, vent_port)
+    sink_addr = 'tcp://%s:%s' % (address, sink_port)
+    tmp_receiver = context.socket(zmq.PULL)
+    tmp_receiver.connect(vent_addr)
+    poller.register(tmp_receiver, zmq.POLLIN)
+    tmp_sender = context.socket(zmq.PUSH)
+    tmp_sender.connect(sink_addr)
+    connections.append((tmp_receiver, tmp_sender))
 
 def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
     vent_sender = context.socket(zmq.PUSH)
@@ -23,18 +44,9 @@ def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
     poller.register(sink_receiver, zmq.POLLIN)
     connections = []
     for address in addresses:
-        vent_addr = 'tcp://%s:%s' % (address, vent_port)
-        sink_addr = 'tcp://%s:%s' % (address, sink_port)
-        tmp_receiver = context.socket(zmq.PULL)
-        tmp_receiver.connect(vent_addr)
-        poller.register(tmp_receiver, zmq.POLLIN)
-        tmp_sender = context.socket(zmq.PUSH)
-        tmp_sender.connect(sink_addr)
-        connections.append((address, tmp_receiver, tmp_sender))
+        add_connection(context, poller, connections, address, vent_port, sink_port)
     while True:
-        while not queue.empty():
-            job_tuple = queue.get()
-            vent_sender.send(pickle.dumps(job_tuple))
+        send_pending_jobs(queue, vent_sender)
         while True:
             try:
                 s = sink_receiver.recv(zmq.NOBLOCK)
@@ -43,13 +55,9 @@ def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
             except ZMQError:
                 break
         socks = dict(poller.poll(500))
-        for address, receiver, sender in connections:
+        for receiver, sender in connections:
             if socks.get(receiver):
-                s = receiver.recv()
-                job, job_id = pickle.loads(s)
-                result = job()
-                reply = (result, job_id)
-                sender.send(pickle.dumps(reply))
+                process_job(receiver, sender)
 
 def construct_worker(addresses, config={}):
     vent_port = config.get('vent_port', VENT_PORT_DEFAULT)
