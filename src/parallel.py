@@ -12,11 +12,13 @@ from zmq.core.error import ZMQError
 VENT_PORT_DEFAULT = '5000'
 SINK_PORT_DEFAULT = '5001'
 
+# push any jobs waiting in the queue
 def send_pending_jobs(queue, sender):
     while not queue.empty():
         job_tuple = queue.get()
         sender.send(pickle.dumps(job_tuple))
 
+# run a job and return the result. assumes that there is a message queued for the receiver.
 def process_job(receiver, sender):
     s = receiver.recv()
     job, job_id = pickle.loads(s)
@@ -24,6 +26,7 @@ def process_job(receiver, sender):
     reply = (result, job_id)
     sender.send(pickle.dumps(reply))
 
+# add a set of sockets to the poller and list of connections
 def add_connection(context, poller, connections, address, vent_port, sink_port):
     vent_addr = 'tcp://%s:%s' % (address, vent_port)
     sink_addr = 'tcp://%s:%s' % (address, sink_port)
@@ -34,6 +37,7 @@ def add_connection(context, poller, connections, address, vent_port, sink_port):
     tmp_sender.connect(sink_addr)
     connections.append((tmp_receiver, tmp_sender))
 
+# push jobs, handle replies, and process incoming jobs
 def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
     vent_sender = context.socket(zmq.PUSH)
     vent_sender.bind('tcp://*:%s' % vent_port)
@@ -59,6 +63,7 @@ def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
             if socks.get(receiver):
                 process_job(receiver, sender)
 
+# construct basic functions for handling parallel processing
 def construct_worker(addresses, config={}):
     vent_port = config.get('vent_port', VENT_PORT_DEFAULT)
     sink_port = config.get('sink_port', SINK_PORT_DEFAULT)
@@ -70,7 +75,6 @@ def construct_worker(addresses, config={}):
         worker_loop(context, queue, addresses, callback, vent_port, sink_port)
 
     def close():
-        # should we destroy???
         context.destroy()
 
     def run_job(job):
