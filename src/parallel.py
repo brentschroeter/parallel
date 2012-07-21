@@ -21,8 +21,8 @@ def send_pending_jobs(queue, sender):
 # run a job and return the result. assumes that there is a message queued for the receiver.
 def process_job(receiver, sender):
     s = receiver.recv()
-    job, job_id = pickle.loads(s)
-    result = job()
+    job, args, job_id = pickle.loads(s)
+    result = job(args)
     reply = (result, job_id)
     sender.send(pickle.dumps(reply))
 
@@ -77,9 +77,9 @@ def construct_worker(addresses, config={}):
     def close():
         context.destroy()
 
-    def run_job(job):
+    def run_job(job, args=()):
         job_id = str(uuid.uuid4())
-        queue.put((job, job_id))
+        queue.put((job, args, job_id))
         return job_id
 
     return worker, close, run_job

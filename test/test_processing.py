@@ -2,7 +2,7 @@
 
 import parallel
 
-def job():
+def job(args):
     return 1
 
 def main():

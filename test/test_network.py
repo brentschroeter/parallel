@@ -1,54 +1,29 @@
 #!/usr/bin/env python
 
-import time
-import sys
 import parallel
-import tasks
-import random
-from zmq.core.error import ZMQError
+import time
+
+def wait_job(ms):
+    time.sleep(ms * 0.001)
+    return 1
 
 def main():
-	worker_pool = []
-	print 'Enter the IP addresses of other clients. Enter "done" to finish.'
-	address = 'localhost'
-	while address != 'done':
-		worker_pool.append(address)
-		address = raw_input('Address: ')
+    worker_pool = []
+    print 'Enter the IP addresses of other clients. Enter a blank line when you are finished.'
+    address = 'localhost'
+    while address != '':
+        worker_pool.append(address)
+        address = raw_input('Address: ')
 
-	print ''
-	print 'Commands:'
-	print 'work: Accept work from other clients.'
-	print 'push: Generate and push jobs.'
-	print 'quit: Quit.'
-	print ''
+    worker, close, run_job = parallel.construct_worker(worker_pool)
 
-	while True:
-		cmd = raw_input('Command: ')
-		if cmd == 'work':
-			try:
-				parallel.accept_work(worker_pool)
-			except ZMQError as err:
-				print 'Error: %s' % err.strerror
-		elif cmd == 'push':
-			push_jobs()
-		elif cmd == 'quit':
-			break
-		else:
-			print 'Command not recognized.'
+    for i in range(60):
+        run_job(wait_job, (1000))
 
-def push_jobs():
-	jobs = []
-	for i in range(1000):
-		jobs.append(tasks.WaitTask(random.randint(300, 500)))
-	job_ids = parallel.run_jobs(jobs)
-	finished_jobs = {}
-	for i in job_ids:
-		result = None
-		while result == None:
-			try:
-				result = parallel.get_job(i, finished_jobs=finished_jobs)
-			except ZMQError as err:
-				print 'Error: %s' % err.strerror
-		print result
+    def process_reply(result, job_id):
+        print 'Job completed: ', job_id
 
-main()
+    worker(process_reply)
+
+if __name__ == '__main__':
+    main()
