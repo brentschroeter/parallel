@@ -27,15 +27,14 @@ def process_job(receiver, sender):
     sender.send(pickle.dumps(reply))
 
 # add a set of sockets to the poller and list of connections
-def add_connection(context, poller, connections, address, vent_port, sink_port):
-    vent_addr = 'tcp://%s:%s' % (address, vent_port)
-    sink_addr = 'tcp://%s:%s' % (address, sink_port)
-    tmp_receiver = context.socket(zmq.PULL)
-    tmp_receiver.connect(vent_addr)
-    poller.register(tmp_receiver, zmq.POLLIN)
-    tmp_sender = context.socket(zmq.PUSH)
-    tmp_sender.connect(sink_addr)
-    connections.append((tmp_receiver, tmp_sender))
+def add_connection(context, vent_addr, sink_addr):
+    vent_addr = 'tcp://%s' % vent_addr
+    sink_addr = 'tcp://%s' % sink_addr
+    receiver = context.socket(zmq.PULL)
+    receiver.connect(vent_addr)
+    sender = context.socket(zmq.PUSH)
+    sender.connect(sink_addr)
+    return receiver, sender
 
 # push jobs, handle replies, and process incoming jobs
 def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
@@ -47,8 +46,10 @@ def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
     sink_receiver.bind('tcp://*:%s' % sink_port)
     poller.register(sink_receiver, zmq.POLLIN)
     connections = []
-    for address in addresses:
-        add_connection(context, poller, connections, address, vent_port, sink_port)
+    for vent_addr, sink_addr in addresses:
+        tmp_receiver, tmp_sender = add_connection(context, vent_addr, sink_addr)
+        connections.append((tmp_receiver, tmp_sender))
+        poller.register(tmp_receiver, zmq.POLLIN)
     while True:
         send_pending_jobs(queue, vent_sender)
         while True:

@@ -12,7 +12,7 @@ def main():
     print 'Enter the IP addresses of other clients. Enter a blank line when you are finished.'
     address = 'localhost'
     while address != '':
-        worker_pool.append(address)
+        worker_pool.append(('%s:5000' % address, '%s:5001' % address))
         address = raw_input('Address: ')
 
     worker, close, run_job = parallel.construct_worker(worker_pool)
