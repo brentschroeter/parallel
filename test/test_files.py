@@ -59,9 +59,11 @@ class TestParallel(unittest.TestCase):
                 f = open(result)
                 file_contents = f.read()
                 f.close()
+                os.remove(result)
                 self.assertEquals(file_contents, TESTING_STR)
             except:
                 self.fail('File not present.')
+        os.rmdir('testing_files')
         self.assertEquals(total_results, 5)
 
 if __name__ == '__main__':
