@@ -13,13 +13,14 @@ VENT_PORT_DEFAULT = '5000'
 SINK_PORT_DEFAULT = '5001'
 
 # push any jobs waiting in the queue
-def send_pending_jobs(pending_q, sender, sent_jobs, max_sent_jobs):
+def send_pending_jobs(queue, sender, sent_jobs, max_sent_jobs):
     for i in range(max_sent_jobs - len(sent_jobs)):
-        if pending_q.empty():
+        try:
+            job_tuple = queue.get(False)
+            sender.send(pickle.dumps(job_tuple))
+            sent_jobs.append(job_tuple[2])
+        except Queue.Empty:
             break
-        job_tuple = pending_q.get()
-        sender.send(pickle.dumps(job_tuple))
-        sent_jobs.append(job_tuple[2])
 
 # run a job and return the result. assumes that there is a message queued for the receiver.
 def process_job(receiver, sender):
@@ -40,7 +41,7 @@ def add_connection(context, vent_addr, sink_addr):
     return receiver, sender
 
 # push jobs, handle replies, and process incoming jobs
-def worker_loop(context, pending_q, addresses, callback, vent_port, sink_port):
+def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
     vent_sender = context.socket(zmq.PUSH)
     vent_sender.bind('tcp://*:%s' % vent_port)
     time.sleep(0.5)
@@ -56,7 +57,6 @@ def worker_loop(context, pending_q, addresses, callback, vent_port, sink_port):
     approx_workers = len(connections)
     sent_jobs = []
     while True:
-        send_pending_jobs(pending_q, vent_sender, sent_jobs, approx_workers)
         while True:
             try:
                 s = sink_receiver.recv(zmq.NOBLOCK)
@@ -66,6 +66,7 @@ def worker_loop(context, pending_q, addresses, callback, vent_port, sink_port):
                     sent_jobs.remove(job_id)
             except ZMQError:
                 break
+        send_pending_jobs(queue, vent_sender, sent_jobs, approx_workers)
         socks = dict(poller.poll(500))
         for receiver, sender in connections:
             if socks.get(receiver):
@@ -77,17 +78,17 @@ def construct_worker(addresses, config={}):
     sink_port = config.get('sink_port', SINK_PORT_DEFAULT)
 
     context = zmq.Context()
-    pending_q = Queue.Queue()
+    queue = Queue.Queue()
 
     def worker(callback):
-        worker_loop(context, pending_q, addresses, callback, vent_port, sink_port)
+        worker_loop(context, queue, addresses, callback, vent_port, sink_port)
 
     def close():
         context.destroy()
 
     def run_job(job, args=()):
         job_id = str(uuid.uuid4())
-        pending_q.put((job, args, job_id))
+        queue.put((job, args, job_id))
         return job_id
 
     return worker, close, run_job

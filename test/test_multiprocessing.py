@@ -3,6 +3,7 @@
 import parallel
 import unittest
 import multiprocessing
+import thread
 import time
 
 def wait_job(ms):
@@ -19,25 +20,25 @@ def get_queue_len(queue):
             break
     return length
 
+def push(vent_port, sink_port, results_queue):
+    def result_received(result, job_id):
+        results_queue.put(result)
+        
+    worker, close, run_job = parallel.construct_worker([('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')], {'vent_port': vent_port, 'sink_port': sink_port})
+    for i in range(5):
+        run_job(wait_job, (1000))
+    time.sleep(1.5)
+    worker(result_received)
+
+def work(vent_port, sink_port):
+    def result_received(job_id, result):
+        pass
+
+    worker, close, run_job = parallel.construct_worker([('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')], {'vent_port': vent_port, 'sink_port': sink_port})
+    worker(result_received)
+            
 class TestParallel(unittest.TestCase):
     def test_multiprocessing(self):
-        def push(vent_port, sink_port, results_queue):
-            def result_received(result, job_id):
-                results_queue.put(result)
-                
-            worker, close, run_job = parallel.construct_worker([('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')], {'vent_port': vent_port, 'sink_port': sink_port})
-            for i in range(5):
-                run_job(wait_job, (1000))
-            time.sleep(1.5)
-            worker(result_received)
-
-        def work(vent_port, sink_port):
-            def result_received(job_id, result):
-                pass
-
-            worker, close, run_job = parallel.construct_worker([('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')], {'vent_port': vent_port, 'sink_port': sink_port})
-            worker(result_received)
-            
         queue = multiprocessing.Queue()
         p1 = multiprocessing.Process(target=push, args=('5000', '5001', queue))
         p2 = multiprocessing.Process(target=work, args=('5002', '5003'))
@@ -50,6 +51,15 @@ class TestParallel(unittest.TestCase):
         p1.terminate()
         p2.terminate()
         p3.terminate()
+        self.assertEqual(q_len, 5)
+
+    def test_threading(self):
+        queue = multiprocessing.Queue()
+        t1 = thread.start_new_thread(push, ('5000', '5001', queue))
+        t2 = thread.start_new_thread(work, ('5002', '5003'))
+        t3 = thread.start_new_thread(work, ('5004', '5005'))
+        time.sleep(6)
+        q_len = get_queue_len(queue)
         self.assertEqual(q_len, 5)
 
 if __name__ == '__main__':

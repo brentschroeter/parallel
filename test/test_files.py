@@ -44,7 +44,7 @@ class TestParallel(unittest.TestCase):
         p1.start()
         p2.start()
         p3.start()
-        time.sleep(6)
+        time.sleep(3)
         p1.terminate()
         p2.terminate()
         p3.terminate()
