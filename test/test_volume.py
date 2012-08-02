@@ -22,8 +22,9 @@ def get_timeout(usage_pattern, num_workers):
     rep_wait = usage_pattern[3]
     
     time_per_set = max(set_wait, reps * rep_wait / num_workers)
+    transportation_time = 20 * (sets * reps) + 1000
 
-    return time_per_set * sets + 2000 # add 2 seconds for connecting and sending
+    return time_per_set * sets + transportation_time
 
 def run_jobs_with_pattern(run_job, usage_pattern):
     for i in range(usage_pattern[0]):
@@ -32,13 +33,11 @@ def run_jobs_with_pattern(run_job, usage_pattern):
             run_job(wait_job, (usage_pattern[3]))
 
 def push(vent_port, sink_port, usage_pattern, on_completed):
-    on_completed()
     total_jobs = usage_pattern[0] * usage_pattern[2]
     total_completed = [0] # stored as a list as a workaround for Python variable scoping "quirk"
     def result_received(result, job_id):
         total_completed[0] += 1
         if total_completed[0] == total_jobs:
-            print 'completed.'
             on_completed()
         
     worker, close, run_job = parallel.construct_worker(WORKER_POOL, {'vent_port': vent_port, 'sink_port': sink_port})
@@ -55,18 +54,17 @@ def work(vent_port, sink_port):
 
 class TestParallel(unittest.TestCase):
     def test_volume(self):
-        completed = [False]
+        completed = multiprocessing.Value('i')
         def on_completed():
-            completed
-            completed[0] = True
+            completed.value = True
         def check_for_completion(timeout):
             tstart = time.time()
-            while (time.time() - tstart) * 1000 < timeout:
-                if completed[0]:
+            while (time.time() - tstart) < timeout * 0.001:
+                if completed.value:
                     return True
             return False
         for usage_pattern in USAGE_PATTERNS:
-            completed[0] = False
+            completed.value = False
             p1 = multiprocessing.Process(target=push, args=('5000', '5001', usage_pattern, on_completed))
             p2 = multiprocessing.Process(target=work, args=('5002', '5003'))
             p3 = multiprocessing.Process(target=work, args=('5004', '5005'))
@@ -75,7 +73,7 @@ class TestParallel(unittest.TestCase):
             p3.start()
             timeout = get_timeout(usage_pattern, 3)
             if not check_for_completion(timeout):
-                self.fail('Did not complete tasks before timeout.')
+                self.fail('Failed on usage pattern: %s' % str(usage_pattern))
             p1.terminate()
             p2.terminate()
             p3.terminate()
