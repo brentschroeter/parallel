@@ -2,65 +2,77 @@
 
 import parallel
 import unittest
-import multiprocessing
 import thread
 import time
+import testing_lib
+from multiprocessing import RawValue
+
+NUM_JOBS = 5
+NUM_WORKERS = 3
+WAIT_TIME = 1000
+WORKER_POOL = [('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')]
 
 def wait_job(ms):
     time.sleep(ms * 0.001)
     return 1
 
-def get_queue_len(queue):
-    length = 0
-    while True:
-        try:
-            queue.get(False)
-            length += 1
-        except:
-            break
-    return length
+def get_timeout(num_workers):
+    transportation_time = testing_lib.TRANSPORT_MS * NUM_JOBS + 1000
+    working_time = WAIT_TIME * NUM_JOBS / num_workers
 
-def push(vent_port, sink_port, results_queue):
-    def result_received(result, job_id):
-        results_queue.put(result)
-        
-    worker, close, run_job = parallel.construct_worker([('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')], {'vent_port': vent_port, 'sink_port': sink_port})
-    for i in range(5):
-        run_job(wait_job, (1000))
-    time.sleep(1.5)
-    worker(result_received)
+    return working_time + transportation_time
 
-def work(vent_port, sink_port):
-    def result_received(job_id, result):
-        pass
-
-    worker, close, run_job = parallel.construct_worker([('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')], {'vent_port': vent_port, 'sink_port': sink_port})
-    worker(result_received)
-            
 class TestParallel(unittest.TestCase):
     def test_multiprocessing(self):
-        queue = multiprocessing.Queue()
-        p1 = multiprocessing.Process(target=push, args=('5000', '5001', queue))
-        p2 = multiprocessing.Process(target=work, args=('5002', '5003'))
-        p3 = multiprocessing.Process(target=work, args=('5004', '5005'))
-        p1.start()
-        p2.start()
-        p3.start()
-        time.sleep(6)
-        q_len = get_queue_len(queue)
-        p1.terminate()
-        p2.terminate()
-        p3.terminate()
-        self.assertEqual(q_len, 5)
+        total_completed = RawValue('i')
+        def result_received(result, job_id):
+            total_completed.value += 1
+        def push(vent_port, sink_port, worker_pool):
+            worker, close, run_job = parallel.construct_worker(WORKER_POOL, {'vent_port': vent_port, 'sink_port': sink_port})
+            for i in range(NUM_JOBS):
+                run_job(wait_job, (WAIT_TIME))
+            worker(result_received)
+        def check_for_completion():
+            timeout = get_timeout(NUM_WORKERS)
+            tstart = time.time()
+            while (time.time() - tstart) < timeout * 0.001:
+                if total_completed.value == NUM_JOBS:
+                    return True
+            return False
+
+        total_completed.value = 0
+        start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
+        start_workers()
+        completion = check_for_completion()
+        kill_workers()
+        if not completion:
+            self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_JOBS))
 
     def test_threading(self):
-        queue = multiprocessing.Queue()
-        t1 = thread.start_new_thread(push, ('5000', '5001', queue))
-        t2 = thread.start_new_thread(work, ('5002', '5003'))
-        t3 = thread.start_new_thread(work, ('5004', '5005'))
-        time.sleep(6)
-        q_len = get_queue_len(queue)
-        self.assertEqual(q_len, 5)
+        total_completed = RawValue('i')
+        def result_received(result, job_id):
+            total_completed.value += 1
+        def push(vent_port, sink_port, worker_pool):
+            worker, close, run_job = parallel.construct_worker(WORKER_POOL, {'vent_port': vent_port, 'sink_port': sink_port})
+            for i in range(NUM_JOBS):
+                run_job(wait_job, (WAIT_TIME))
+            worker(result_received)
+        def check_for_completion():
+            timeout = get_timeout(NUM_WORKERS)
+            tstart = time.time()
+            while (time.time() - tstart) < timeout * 0.001:
+                if total_completed.value == NUM_JOBS:
+                    return True
+            return False
+
+        total_completed.value = 0
+        port = 5000
+        thread.start_new_thread(push, (port, port + 1, WORKER_POOL))
+        for i in range(NUM_WORKERS - 1):
+            port += 2
+            thread.start_new_thread(testing_lib.work, (port, port + 1, WORKER_POOL))
+        if not check_for_completion():
+            self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_JOBS))
 
 if __name__ == '__main__':
     unittest.main()

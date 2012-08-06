@@ -24,11 +24,14 @@ def send_pending_jobs(queue, sender, sent_jobs, max_sent_jobs):
 
 # run a job and return the result. assumes that there is a message queued for the receiver.
 def process_job(receiver, sender):
-    s = receiver.recv()
-    job, args, job_id = pickle.loads(s)
-    result = job(args)
-    reply = (result, job_id)
-    sender.send(pickle.dumps(reply))
+    try:
+        s = receiver.recv(zmq.NOBLOCK)
+        job, args, job_id = pickle.loads(s)
+        result = job(args)
+        reply = (result, job_id)
+        sender.send(pickle.dumps(reply))
+    except ZMQError:
+        pass
 
 # add a set of sockets to the poller and list of connections
 def add_connection(context, vent_addr, sink_addr):
@@ -44,7 +47,7 @@ def add_connection(context, vent_addr, sink_addr):
 def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
     vent_sender = context.socket(zmq.PUSH)
     vent_sender.bind('tcp://*:%s' % vent_port)
-    time.sleep(0.5)
+    time.sleep(0.1)
     poller = zmq.Poller()
     sink_receiver = context.socket(zmq.PULL)
     sink_receiver.bind('tcp://*:%s' % sink_port)
