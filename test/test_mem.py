@@ -10,7 +10,6 @@ from multiprocessing import RawValue
 from guppy import hpy
 
 WORKER_POOL = [('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')]
-# each usage pattern is in the format (sets, sleep time between sets, repetitions per set, sleep time for each job)
 NUM_STRINGS = 200
 STR_LEN = 1000
 MEM_LIMIT = 8000000
