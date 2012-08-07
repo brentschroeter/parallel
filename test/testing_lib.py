@@ -14,17 +14,19 @@ def work(vent_port, sink_port, worker_pool):
     worker(result_received)
 
 # provides functions to start a set of workers including 1 pusher and num - 1 normal workers. worker_pool is a list containing vent/sink address pairs.
-def construct_worker_pool(num, worker_pool, push_func):
+def construct_worker_pool(num, worker_pool, push_func, num_pushers=1):
     processes = []
     def start(start_port=5000):
-        p = multiprocessing.Process(target=push_func, args=(start_port, start_port + 1, worker_pool))
-        p.start()
-        processes.append(p)
-        for i in range(num - 1):
+        for i in range(num_pushers):
+            p = multiprocessing.Process(target=push_func, args=(start_port, start_port + 1, worker_pool))
+            p.start()
+            processes.append(p)
             start_port += 2
+        for i in range(num - num_pushers):
             p = multiprocessing.Process(target=work, args=(start_port, start_port + 1, worker_pool))
             p.start()
             processes.append(p)
+            start_port += 2
     def kill():
         for p in processes:
             p.terminate()
