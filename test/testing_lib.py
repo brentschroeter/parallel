@@ -2,6 +2,7 @@
 
 import parallel
 import multiprocessing
+import time
 
 # max ms spent sending/receiving each job
 TRANSPORT_MS = 50
@@ -28,3 +29,10 @@ def construct_worker_pool(num, worker_pool, push_func):
         for p in processes:
             p.terminate()
     return start, kill
+
+def check_for_completion(total_completed, num_jobs, timeout):
+    tstart = time.time()
+    while (time.time() - tstart) < timeout * 0.001:
+        if total_completed.value == num_jobs:
+            return True
+    return False

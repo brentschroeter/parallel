@@ -2,7 +2,6 @@
 
 import parallel
 import unittest
-import time
 import string
 import random
 import testing_lib
@@ -39,13 +38,6 @@ class TestParallel(unittest.TestCase):
         total_completed = RawValue('i')
         def result_received(result, job_id):
             total_completed.value += 1
-        def check_for_completion():
-            timeout = get_timeout(NUM_WORKERS)
-            tstart = time.time()
-            while (time.time() - tstart) < timeout * 0.001:
-                if total_completed.value == NUM_STRINGS:
-                    return True
-            return False
         def push(vent_port, sink_port, worker_pool):
             worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             run_jobs(run_job, self.fail)
@@ -55,7 +47,7 @@ class TestParallel(unittest.TestCase):
         start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
         start_workers()
         timeout = get_timeout(NUM_WORKERS)
-        completion = check_for_completion()
+        completion = testing_lib.check_for_completion(total_completed, NUM_STRINGS, get_timeout(NUM_WORKERS))
         kill_workers()
         if not completion:
             self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_STRINGS))

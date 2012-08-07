@@ -2,7 +2,6 @@
 
 import parallel
 import unittest
-import time
 import random
 import os
 import testing_lib
@@ -40,13 +39,6 @@ class TestParallel(unittest.TestCase):
             except:
                 self.fail('File not present.')
             total_completed.value += 1
-        def check_for_completion():
-            timeout = get_timeout(NUM_WORKERS)
-            tstart = time.time()
-            while (time.time() - tstart) < timeout * 0.001:
-                if total_completed.value == NUM_FILES:
-                    return True
-            return False
         def push(vent_port, sink_port, worker_pool):
             worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(NUM_FILES):
@@ -57,7 +49,7 @@ class TestParallel(unittest.TestCase):
             os.mkdir('testing_files')
         start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
         start_workers()
-        if not check_for_completion():
+        if not testing_lib.check_for_completion(total_completed, NUM_FILES, get_timeout(NUM_WORKERS)):
             self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_FILES))
         kill_workers()
         os.rmdir('testing_files')

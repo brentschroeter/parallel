@@ -36,14 +36,6 @@ class TestParallel(unittest.TestCase):
         def result_received(result, job_id):
             total_completed.value += 1
         for pattern in USAGE_PATTERNS:
-            def check_for_completion():
-                total_jobs = pattern.sets * pattern.set_reps
-                timeout = get_timeout(pattern, NUM_WORKERS)
-                tstart = time.time()
-                while (time.time() - tstart) < timeout * 0.001:
-                    if total_completed.value == total_jobs:
-                        return True
-                return False
             def push(vent_port, sink_port, worker_pool):
                 worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
                 t = threading.Thread(target=run_jobs_with_pattern, args=[run_job, pattern])
@@ -51,9 +43,10 @@ class TestParallel(unittest.TestCase):
                 worker(result_received)
 
             total_completed.value = 0
+            total_jobs = pattern.sets * pattern.set_reps
             start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
             start_workers()
-            if not check_for_completion():
+            if not testing_lib.check_for_completion(total_completed, total_jobs, get_timeout(pattern, NUM_WORKERS)):
                 self.fail('Failed on usage pattern: %s' % str(pattern))
             kill_workers()
 

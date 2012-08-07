@@ -3,8 +3,8 @@
 import parallel
 import unittest
 import thread
-import time
 import testing_lib
+import time
 from multiprocessing import RawValue
 
 NUM_JOBS = 5
@@ -28,22 +28,15 @@ class TestParallel(unittest.TestCase):
         def result_received(result, job_id):
             total_completed.value += 1
         def push(vent_port, sink_port, worker_pool):
-            worker, close, run_job = parallel.construct_worker(WORKER_POOL, {'vent_port': vent_port, 'sink_port': sink_port})
+            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(NUM_JOBS):
                 run_job(wait_job, (WAIT_TIME))
             worker(result_received)
-        def check_for_completion():
-            timeout = get_timeout(NUM_WORKERS)
-            tstart = time.time()
-            while (time.time() - tstart) < timeout * 0.001:
-                if total_completed.value == NUM_JOBS:
-                    return True
-            return False
 
         total_completed.value = 0
         start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
         start_workers()
-        completion = check_for_completion()
+        completion = testing_lib.check_for_completion(total_completed, NUM_JOBS, get_timeout(NUM_WORKERS))
         kill_workers()
         if not completion:
             self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_JOBS))
@@ -53,17 +46,10 @@ class TestParallel(unittest.TestCase):
         def result_received(result, job_id):
             total_completed.value += 1
         def push(vent_port, sink_port, worker_pool):
-            worker, close, run_job = parallel.construct_worker(WORKER_POOL, {'vent_port': vent_port, 'sink_port': sink_port})
+            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(NUM_JOBS):
                 run_job(wait_job, (WAIT_TIME))
             worker(result_received)
-        def check_for_completion():
-            timeout = get_timeout(NUM_WORKERS)
-            tstart = time.time()
-            while (time.time() - tstart) < timeout * 0.001:
-                if total_completed.value == NUM_JOBS:
-                    return True
-            return False
 
         total_completed.value = 0
         port = 5000
@@ -71,7 +57,7 @@ class TestParallel(unittest.TestCase):
         for i in range(NUM_WORKERS - 1):
             port += 2
             thread.start_new_thread(testing_lib.work, (port, port + 1, WORKER_POOL))
-        if not check_for_completion():
+        if not testing_lib.check_for_completion(total_completed, NUM_JOBS, get_timeout(NUM_WORKERS)):
             self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_JOBS))
 
 if __name__ == '__main__':
