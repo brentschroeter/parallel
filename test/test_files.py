@@ -21,7 +21,7 @@ def file_job(file_contents):
 
 def get_timeout(num_workers):
     transportation_time = testing_lib.TRANSPORT_MS * NUM_FILES + 1000
-    working_time = 10 * NUM_FILES / num_workers
+    working_time = 10 * NUM_FILES
 
     return working_time + transportation_time
 
