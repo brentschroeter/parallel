@@ -7,6 +7,7 @@ import uuid
 import pickle
 import time
 import Queue
+import os.path
 from zmq.core.error import ZMQError
 
 VENT_PORT_DEFAULT = '5000'
@@ -23,15 +24,23 @@ def send_pending_jobs(queue, sender, sent_jobs, max_sent_jobs):
             break
 
 # run a job and return the result. assumes that there is a message queued for the receiver.
-def process_job(receiver, sender):
+def process_job(receiver, sender, log_path):
     try:
         s = receiver.recv(zmq.NOBLOCK)
         job, args, job_id = pickle.loads(s)
         result = job(args)
         reply = (result, job_id)
         sender.send(pickle.dumps(reply))
+        log_txt = 'Successful: %s' % job_id
     except ZMQError:
-        pass
+        log_txt = 'Unsuccessful: %s' % job_id
+    if log_path:
+        try: # just in case someone deletes the file (you never know!)
+            log_file = open(log_path, 'a')
+            log_file.write(log_txt + '\n')
+            log_file.close()
+        except IOError:
+            pass
 
 # add a set of sockets to the poller and list of connections
 def add_connection(context, vent_addr, sink_addr):
@@ -44,7 +53,7 @@ def add_connection(context, vent_addr, sink_addr):
     return receiver, sender
 
 # push jobs, handle replies, and process incoming jobs
-def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
+def worker_loop(context, queue, addresses, callback, vent_port, sink_port, log_path=None):
     vent_sender = context.socket(zmq.PUSH)
     vent_sender.bind('tcp://*:%s' % vent_port)
     time.sleep(0.1)
@@ -73,18 +82,27 @@ def worker_loop(context, queue, addresses, callback, vent_port, sink_port):
         socks = dict(poller.poll(500))
         for receiver, sender in connections:
             if socks.get(receiver):
-                process_job(receiver, sender)
+                process_job(receiver, sender, log_path)
 
 # construct basic functions for handling parallel processing
 def construct_worker(addresses, config={}):
     vent_port = config.get('vent_port', VENT_PORT_DEFAULT)
     sink_port = config.get('sink_port', SINK_PORT_DEFAULT)
+    worker_id = config.get('worker_id', None)
 
     context = zmq.Context()
     queue = Queue.Queue()
 
     def worker(callback):
-        worker_loop(context, queue, addresses, callback, vent_port, sink_port)
+        if worker_id != None:
+            if not os.path.exists('worker_logs/'):
+                os.mkdir('worker_logs')
+            log_path = 'worker_logs/%s.txt' % worker_id
+            log_file = open(log_path, 'w')
+            log_file.close()
+        else:
+            log_path = None
+        worker_loop(context, queue, addresses, callback, vent_port, sink_port, log_path)
 
     def close():
         context.destroy()
