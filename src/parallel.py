@@ -7,7 +7,7 @@ import uuid
 import pickle
 import time
 import Queue
-import os.path
+import os
 from zmq.core.error import ZMQError
 
 VENT_PORT_DEFAULT = '5000'
@@ -23,8 +23,18 @@ def send_pending_jobs(queue, sender, sent_jobs, max_sent_jobs):
         except Queue.Empty:
             break
 
+# for logging a worker's activity to a file
+def get_log_path(worker_id):
+    assert worker_id != None
+    if not os.path.exists('worker_logs/'):
+        os.mkdir('worker_logs/')
+    log_path = 'worker_logs/%s.txt' % worker_id
+    if not os.path.exists(log_path):
+        f = open(log_path, 'w')
+        f.close()
+    return log_path
 # run a job and return the result. assumes that there is a message queued for the receiver.
-def process_job(receiver, sender, log_path):
+def process_job(receiver, sender, worker_id):
     try:
         s = receiver.recv(zmq.NOBLOCK)
         job, args, job_id = pickle.loads(s)
@@ -34,9 +44,9 @@ def process_job(receiver, sender, log_path):
         log_txt = 'Successful: %s' % job_id
     except ZMQError:
         log_txt = 'Unsuccessful: %s' % job_id
-    if log_path:
+    if worker_id:
         try: # just in case someone deletes the file (you never know!)
-            log_file = open(log_path, 'a')
+            log_file = open(get_log_path(worker_id), 'a')
             log_file.write(log_txt + '\n')
             log_file.close()
         except IOError:
@@ -53,7 +63,7 @@ def add_connection(context, vent_addr, sink_addr):
     return receiver, sender
 
 # push jobs, handle replies, and process incoming jobs
-def worker_loop(context, queue, addresses, callback, vent_port, sink_port, log_path=None):
+def worker_loop(context, queue, addresses, callback, vent_port, sink_port, worker_id=None):
     vent_sender = context.socket(zmq.PUSH)
     vent_sender.bind('tcp://*:%s' % vent_port)
     time.sleep(0.1)
@@ -82,7 +92,7 @@ def worker_loop(context, queue, addresses, callback, vent_port, sink_port, log_p
         socks = dict(poller.poll(500))
         for receiver, sender in connections:
             if socks.get(receiver):
-                process_job(receiver, sender, log_path)
+                process_job(receiver, sender, worker_id)
 
 # construct basic functions for handling parallel processing
 def construct_worker(addresses, config={}):
@@ -94,15 +104,7 @@ def construct_worker(addresses, config={}):
     queue = Queue.Queue()
 
     def worker(callback):
-        if worker_id != None:
-            if not os.path.exists('worker_logs/'):
-                os.mkdir('worker_logs')
-            log_path = 'worker_logs/%s.txt' % worker_id
-            log_file = open(log_path, 'w')
-            log_file.close()
-        else:
-            log_path = None
-        worker_loop(context, queue, addresses, callback, vent_port, sink_port, log_path)
+        worker_loop(context, queue, addresses, callback, vent_port, sink_port, worker_id)
 
     def close():
         context.destroy()
