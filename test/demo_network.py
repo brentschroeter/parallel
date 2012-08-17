@@ -2,6 +2,7 @@
 
 import parallel
 import time
+import sys
 
 def wait_job(ms):
     time.sleep(ms * 0.001)
@@ -16,9 +17,10 @@ def main():
         address = raw_input('Address: ')
 
     worker, close, run_job = parallel.construct_worker(worker_pool)
-
-    for i in range(60):
-        run_job(wait_job, (1000))
+    
+    if not 'workonly' in sys.argv:
+        for i in range(60):
+            run_job(wait_job, (1000))
 
     def process_reply(result, job_id):
         print 'Job completed: ', job_id
