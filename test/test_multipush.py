@@ -19,7 +19,7 @@ def wait_job(ms):
     return 1
 
 def get_timeout(num_workers):
-    transportation_time = testing_lib.TRANSPORT_MS * NUM_JOBS * NUM_JOBS + 1000
+    transportation_time = testing_lib.TRANSPORT_MS * NUM_JOBS * NUM_PUSHERS + 1000
     working_time = WAIT_TIME * NUM_JOBS * NUM_PUSHERS
 
     return working_time + transportation_time
