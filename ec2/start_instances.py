@@ -2,7 +2,10 @@
 
 import boto
 import time
-import config
+try:
+    import config
+except:
+    print 'Failed to import config.py.'
 
 def main():
     conn = boto.connect_ec2(KEY_ID, SECRET_KEY)
