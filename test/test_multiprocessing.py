@@ -6,7 +6,9 @@ import thread
 import testing_lib
 import time
 import uuid
+import Queue
 from multiprocessing import RawValue
+from multiprocessing import Queue as MultiQueue
 
 NUM_JOBS = 20
 NUM_WORKERS = 3
@@ -23,70 +25,61 @@ def get_timeout(num_workers):
 
     return working_time + transportation_time
 
-def check_load_balance(worker_ids):
-    try:
-        for i in range(min(len(worker_ids), NUM_JOBS)):
-            worker_id = worker_ids[i]
-            log_file = open('worker_logs/%s.txt' % worker_id)
-            if len(log_file.read()) == 0:
-                return False
-    except IOError:
-        return False
-    return True
+def check_load_balance(job_processors):
+    used_workers = []
+    while True:
+        try:
+            worker = job_processors.get_nowait()
+            if not worker in used_workers:
+                used_workers.append(worker)
+        except Queue.Empty:
+            break
+    return len(used_workers) >= min(NUM_JOBS, NUM_WORKERS)
 
 class TestParallel(unittest.TestCase):
     def test_multiprocessing(self):
         total_completed = RawValue('i')
-        def result_received(result, job_id):
+        job_processors = MultiQueue()
+        def result_received(result, job_info):
             total_completed.value += 1
-        def check_load_balance(worker_ids):
-            try:
-                for i in range(min(len(worker_ids), NUM_JOBS)):
-                    worker_id = worker_ids[i]
-                    log_file = open('worker_logs/%s.txt' % worker_id)
-                    if len(log_file.read()) == 0:
-                        return False
-            except IOError:
-                return False
-            return True
-        def push(vent_port, sink_port, worker_pool, worker_id):
-            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port, 'worker_id': worker_id})
+            job_processors.put(job_info.worker_id)
+        def push(vent_port, sink_port, worker_pool):
+            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(NUM_JOBS):
                 run_job(wait_job, (WAIT_TIME))
             worker(result_received)
 
         total_completed.value = 0
-        start_workers, kill_workers, get_worker_ids = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push, logging=True)
+        start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
         start_workers()
         completion = testing_lib.check_for_completion(total_completed, NUM_JOBS, get_timeout(NUM_WORKERS))
         kill_workers()
         if not completion:
             self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_JOBS))
-        if not check_load_balance(get_worker_ids()):
+        if not check_load_balance(job_processors):
             self.fail('Not all workers utilized.')
 
     def test_threading(self):
         total_completed = RawValue('i')
-        def result_received(result, job_id):
+        job_processors = MultiQueue()
+        def result_received(result, job_info):
             total_completed.value += 1
-        def push(vent_port, sink_port, worker_pool, worker_id):
-            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port, 'worker_id': worker_id})
+            job_processors.put(job_info.worker_id)
+        def push(vent_port, sink_port, worker_pool):
+            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(NUM_JOBS):
                 run_job(wait_job, (WAIT_TIME))
             worker(result_received)
 
         total_completed.value = 0
         port = 5000
-        worker_ids = []
-        worker_ids.append(uuid.uuid4())
-        thread.start_new_thread(push, (port, port + 1, WORKER_POOL, worker_ids[-1]))
+        thread.start_new_thread(push, (port, port + 1, WORKER_POOL))
         for i in range(NUM_WORKERS - 1):
             port += 2
-            worker_ids.append(uuid.uuid4())
-            thread.start_new_thread(testing_lib.work, (port, port + 1, WORKER_POOL, worker_ids[-1]))
+            thread.start_new_thread(testing_lib.work, (port, port + 1, WORKER_POOL))
         if not testing_lib.check_for_completion(total_completed, NUM_JOBS, get_timeout(NUM_WORKERS)):
             self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_JOBS))
-        if not check_load_balance(worker_ids):
+        if not check_load_balance(job_processors):
             self.fail('Not all workers utilized.')
 
 if __name__ == '__main__':

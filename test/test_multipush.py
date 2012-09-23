@@ -27,16 +27,16 @@ def get_timeout(num_workers):
 class TestParallel(unittest.TestCase):
     def test_multipush(self):
         total_completed = RawValue('i')
-        def result_received(result, job_id):
+        def result_received(result, job_info):
             total_completed.value += 1
-        def push(vent_port, sink_port, worker_pool, worker_id):
-            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port, 'worker_id': worker_id})
+        def push(vent_port, sink_port, worker_pool):
+            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(NUM_JOBS):
                 run_job(wait_job, (WAIT_TIME))
             worker(result_received)
 
         total_completed.value = 0
-        start_workers, kill_workers, get_worker_ids = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push, num_pushers=NUM_PUSHERS)
+        start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push, num_pushers=NUM_PUSHERS)
         start_workers()
         completion = testing_lib.check_for_completion(total_completed, NUM_JOBS * NUM_PUSHERS, get_timeout(NUM_WORKERS))
         kill_workers()

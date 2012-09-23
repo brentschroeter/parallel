@@ -29,7 +29,7 @@ class TestParallel(unittest.TestCase):
     def test_files(self):
         total_completed = RawValue('i')
         total_completed.value = 0
-        def result_received(result, job_id):
+        def result_received(result, job_info):
             try:
                 f = open(result)
                 file_contents = f.read()
@@ -39,7 +39,7 @@ class TestParallel(unittest.TestCase):
             except:
                 self.fail('File not present.')
             total_completed.value += 1
-        def push(vent_port, sink_port, worker_pool, worker_id):
+        def push(vent_port, sink_port, worker_pool):
             worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(NUM_FILES):
                 run_job(file_job, (TESTING_STR))
@@ -47,7 +47,7 @@ class TestParallel(unittest.TestCase):
 
         if not os.path.exists(os.path.join(os.path.dirname(__file__), 'testing_files/')):
             os.mkdir('testing_files')
-        start_workers, kill_workers, get_worker_ids = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
+        start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
         start_workers()
         if not testing_lib.check_for_completion(total_completed, NUM_FILES, get_timeout(NUM_WORKERS)):
             self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_FILES))
