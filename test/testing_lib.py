@@ -8,6 +8,12 @@ import uuid
 # max ms spent sending/receiving each job
 TRANSPORT_MS = 50
 
+def worker_addresses(ip_addresses):
+    worker_addresses = []
+    for address in ip_addresses:
+        worker_addresses.append(('%s:%s' % (address, parallel.VENT_PORT_DEFAULT), '%s:%s' % (address, parallel.SINK_PORT_DEFAULT)))
+    return worker_addresses
+
 def work(vent_port, sink_port, worker_pool):
     def result_received(job_id, result):
         pass

@@ -5,14 +5,8 @@ import unittest
 import time
 import threading
 import testing_lib
-from collections import namedtuple
+import config
 from multiprocessing import RawValue
-
-UsagePattern = namedtuple('UsagePattern', 'sets set_sleep set_reps job_sleep')
-
-WORKER_POOL = [('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')]
-NUM_WORKERS = 2
-USAGE_PATTERNS = (UsagePattern(5, 5000, 1, 1000), UsagePattern(500, 0, 1, 10), UsagePattern(5, 3000, 100, 100))
 
 def wait_job(ms):
     time.sleep(ms * 0.001)
@@ -35,7 +29,7 @@ class TestParallel(unittest.TestCase):
         total_completed = RawValue('i')
         def result_received(result, job_info):
             total_completed.value += 1
-        for pattern in USAGE_PATTERNS:
+        for pattern in config.USAGE_PATTERNS:
             def push(vent_port, sink_port, worker_pool):
                 worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
                 t = threading.Thread(target=run_jobs_with_pattern, args=[run_job, pattern])
@@ -44,9 +38,9 @@ class TestParallel(unittest.TestCase):
 
             total_completed.value = 0
             total_jobs = pattern.sets * pattern.set_reps
-            start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
+            start_workers, kill_workers = testing_lib.construct_worker_pool(len(config.WORKER_ADDRESSES), config.WORKER_ADDRESSES, push)
             start_workers()
-            if not testing_lib.check_for_completion(total_completed, total_jobs, get_timeout(pattern, NUM_WORKERS)):
+            if not testing_lib.check_for_completion(total_completed, total_jobs, get_timeout(pattern, len(config.WORKER_ADDRESSES))):
                 self.fail('Failed on usage pattern: %s' % str(pattern))
             kill_workers()
 

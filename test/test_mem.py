@@ -5,14 +5,10 @@ import unittest
 import string
 import random
 import testing_lib
+import sys
+import config
 from multiprocessing import RawValue
 from guppy import hpy
-
-WORKER_POOL = [('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')]
-NUM_STRINGS = 200
-STR_LEN = 100000000
-MEM_LIMIT = 206000000
-NUM_WORKERS = 3
 
 def str_job(s):
     # reverse the string
@@ -22,24 +18,24 @@ def generate_str(length):
     return ''.join(random.choice(string.ascii_uppercase) for x in range(length))
 
 def get_timeout():
-    transportation_time = testing_lib.TRANSPORT_MS * NUM_STRINGS + 1000
-    computation_time = 0.00004 * NUM_STRINGS * STR_LEN
+    transportation_time = testing_lib.TRANSPORT_MS * config.NUM_STRINGS + 1000
+    computation_time = 0.00004 * config.NUM_STRINGS * config.STR_LEN
     return transportation_time + computation_time
 
 def run_jobs(run_job, test_str, fail):
     hp = hpy()
-    test_str = generate_str(STR_LEN)
-    for i in range(NUM_STRINGS):
+    test_str = generate_str(config.STR_LEN)
+    for i in range(config.NUM_STRINGS):
         run_job(str_job, (test_str))
     size = hp.heap().size
-    if size > MEM_LIMIT:
-        fail('Heap size exceeded %d bytes (%d).' % (MEM_LIMIT, size))
+    if size > config.MEM_LIMIT:
+        fail('Heap size exceeded %d bytes (%d).' % (config.MEM_LIMIT, size))
 
 class TestParallel(unittest.TestCase):
     def test_mem(self):
         total_completed = RawValue('i')
         print 'Constructing test string (this could take some time).'
-        test_str = generate_str(STR_LEN)
+        test_str = generate_str(config.STR_LEN)
         print 'Done. Starting test.'
         def result_received(result, job_info):
             total_completed.value += 1
@@ -49,12 +45,12 @@ class TestParallel(unittest.TestCase):
             worker(result_received)
 
         total_completed.value = 0
-        start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
+        start_workers, kill_workers = testing_lib.construct_worker_pool(len(config.WORKER_ADDRESSES), config.WORKER_ADDRESSES, push)
         start_workers()
-        completion = testing_lib.check_for_completion(total_completed, NUM_STRINGS, get_timeout())
+        completion = testing_lib.check_for_completion(total_completed, config.NUM_STRINGS, get_timeout())
         kill_workers()
         if not completion:
-            self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_STRINGS))
+            self.fail('Not all jobs received: %d / %d' % (total_completed.value, config.NUM_STRINGS))
 
 if __name__ == '__main__':
     unittest.main()
