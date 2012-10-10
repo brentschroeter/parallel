@@ -6,7 +6,7 @@ import sys
 
 def main():
     worker_addresses = testing_lib.worker_addresses(sys.argv[1:])
-    worker, close, run_job = parallel.construct_worker(worker_pool)
+    worker, close, run_job = parallel.construct_worker(worker_addresses)
     print 'Worker running with default ports...'
     worker(None)
 
