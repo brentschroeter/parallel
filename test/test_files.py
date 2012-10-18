@@ -5,12 +5,8 @@ import unittest
 import random
 import os
 import testing_lib
+import config
 from multiprocessing import RawValue
-
-WORKER_POOL = [('localhost:5000', 'localhost:5001'), ('localhost:5002', 'localhost:5003'), ('localhost:5004', 'localhost:5005')]
-TESTING_STR = 'Testing testing testing.'
-NUM_WORKERS = 3
-NUM_FILES = 5
 
 def file_job(file_contents):
     path = 'testing_files/%s' % str(random.randint(0, 999999)) + '.txt'
@@ -20,8 +16,8 @@ def file_job(file_contents):
     return path
 
 def get_timeout(num_workers):
-    transportation_time = testing_lib.TRANSPORT_MS * NUM_FILES + 1000
-    working_time = 10 * NUM_FILES
+    transportation_time = testing_lib.TRANSPORT_MS * config.NUM_FILES + 1000
+    working_time = 10 * config.NUM_FILES
 
     return working_time + transportation_time
 
@@ -29,28 +25,26 @@ class TestParallel(unittest.TestCase):
     def test_files(self):
         total_completed = RawValue('i')
         total_completed.value = 0
-        def result_received(result, job_info):
+        def on_recv_result(result, job_info):
             try:
                 f = open(result)
                 file_contents = f.read()
                 f.close()
                 os.remove(result)
-                self.assertEquals(file_contents, TESTING_STR)
+                self.assertEquals(file_contents, config.TESTING_STR)
             except:
                 self.fail('File not present.')
             total_completed.value += 1
-        def push(vent_port, sink_port, worker_pool):
-            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
-            for i in range(NUM_FILES):
-                run_job(file_job, (TESTING_STR))
-            worker(result_received)
+        def send_jobs(run_job):
+            for i in range(config.NUM_FILES):
+                run_job(file_job, (config.TESTING_STR))
 
         if not os.path.exists(os.path.join(os.path.dirname(__file__), 'testing_files/')):
             os.mkdir('testing_files')
-        start_workers, kill_workers = testing_lib.construct_worker_pool(NUM_WORKERS, WORKER_POOL, push)
+        start_workers, kill_workers = testing_lib.construct_worker_pool(config.num_local_workers(), config.WORKER_ADDRESSES, send_jobs, on_recv_result)
         start_workers()
-        if not testing_lib.check_for_completion(total_completed, NUM_FILES, get_timeout(NUM_WORKERS)):
-            self.fail('Not all jobs received: %d / %d' % (total_completed.value, NUM_FILES))
+        if not testing_lib.check_for_completion(total_completed, config.NUM_FILES, get_timeout(len(config.WORKER_ADDRESSES))):
+            self.fail('Not all jobs received: %d / %d' % (total_completed.value, config.NUM_FILES))
         kill_workers()
         os.rmdir('testing_files')
 

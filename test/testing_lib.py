@@ -20,17 +20,22 @@ def work(vent_port, sink_port, worker_pool):
     worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
     worker(result_received)
 
+def pusher(vent_port, sink_port, worker_addresses, send_jobs, on_recv_result):
+    worker, close, run_job = parallel.construct_worker(worker_addresses, {'vent_port': vent_port, 'sink_port': sink_port})
+    send_jobs(run_job)
+    worker(on_recv_result)
+
 # provides functions to start a set of workers including 1 pusher and num - 1 normal workers. worker_pool is a list containing vent/sink address pairs.
-def construct_worker_pool(num, worker_pool, push_func, num_pushers=1):
+def construct_worker_pool(num, worker_addresses, send_jobs, on_recv_result, num_pushers=1):
     processes = []
     def start(start_port=5000):
         for i in range(num_pushers):
-            p = multiprocessing.Process(target=push_func, args=(start_port, start_port + 1, worker_pool))
+            p = multiprocessing.Process(target=pusher, args=(start_port, start_port + 1, worker_addresses, send_jobs, on_recv_result))
             p.start()
             processes.append(p)
             start_port += 2
         for i in range(num - num_pushers):
-            p = multiprocessing.Process(target=work, args=(start_port, start_port + 1, worker_pool))
+            p = multiprocessing.Process(target=work, args=(start_port, start_port + 1, worker_addresses))
             p.start()
             processes.append(p)
             start_port += 2

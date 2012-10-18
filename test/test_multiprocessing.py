@@ -36,17 +36,15 @@ class TestParallel(unittest.TestCase):
     def test_multiprocessing(self):
         total_completed = RawValue('i')
         job_processors = MultiQueue()
-        def result_received(result, job_info):
+        def on_recv_result(result, job_info):
             total_completed.value += 1
             job_processors.put(job_info.worker_id)
-        def push(vent_port, sink_port, worker_pool):
-            worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
+        def send_jobs(run_job):
             for i in range(config.NUM_JOBS):
                 run_job(wait_job, (config.WAIT_TIME))
-            worker(result_received)
 
         total_completed.value = 0
-        start_workers, kill_workers = testing_lib.construct_worker_pool(len(config.WORKER_ADDRESSES), config.WORKER_ADDRESSES, push)
+        start_workers, kill_workers = testing_lib.construct_worker_pool(config.num_local_workers(), config.WORKER_ADDRESSES, send_jobs, on_recv_result)
         start_workers()
         completion = testing_lib.check_for_completion(total_completed, config.NUM_JOBS, get_timeout(len(config.WORKER_ADDRESSES)))
         kill_workers()
@@ -70,7 +68,7 @@ class TestParallel(unittest.TestCase):
         total_completed.value = 0
         port = 5000
         thread.start_new_thread(push, (port, port + 1, config.WORKER_ADDRESSES))
-        for i in range(len(config.WORKER_ADDRESSES) - 1):
+        for i in range(config.num_local_workers() - 1):
             port += 2
             thread.start_new_thread(testing_lib.work, (port, port + 1, config.WORKER_ADDRESSES))
         if not testing_lib.check_for_completion(total_completed, config.NUM_JOBS, get_timeout(len(config.WORKER_ADDRESSES))):
