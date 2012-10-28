@@ -38,6 +38,7 @@ def on_recv_result(result, job_info, args):
 
 class TestParallel(unittest.TestCase):
     def test_mem(self):
+        '''Tests that memory required to transfer jobs does not exceed the given amount.'''
         total_completed = RawValue('i')
         print 'Constructing test string (this could take some time).'
         test_str = generate_str(config.STR_LEN)

@@ -29,6 +29,7 @@ def on_recv_result(result, job_info, args):
 
 class TestParallel(unittest.TestCase):
     def test_multipush(self):
+        '''Tests behavior when multiple servers are pushing jobs simultaneously.'''
         total_completed = RawValue('i')
         total_completed.value = 0
 

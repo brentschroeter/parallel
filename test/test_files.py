@@ -39,6 +39,7 @@ def on_recv_result(result, job_info, args):
 
 class TestParallel(unittest.TestCase):
     def test_files(self):
+        '''Tests that workers can correctly store files in a central location.'''
         total_completed = RawValue('i')
         total_completed.value = 0
         if not os.path.exists(os.path.join(os.path.dirname(__file__), 'testing_files/')):

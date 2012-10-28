@@ -35,6 +35,7 @@ def on_recv_result(result, job_info, args):
 
 class TestParallel(unittest.TestCase):
     def test_volume(self):
+        '''Tests the ability to handle various traffic patterns (trickle, normal, and spike by default).'''
         total_completed = RawValue('i')
         for pattern in config.USAGE_PATTERNS:
             total_completed.value = 0

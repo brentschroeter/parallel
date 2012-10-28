@@ -44,6 +44,7 @@ def on_recv_result(result, job_info, args):
 
 class TestParallel(unittest.TestCase):
     def test_multiprocessing(self):
+        '''Tests that jobs will execute properly on multiple processes simultaneously.'''
         total_completed = RawValue('i')
         job_processors = MultiQueue()
         total_completed.value = 0
@@ -58,6 +59,7 @@ class TestParallel(unittest.TestCase):
             self.fail('Not all workers utilized.')
 
     def test_threading(self):
+        '''Tests that jobs will execute properly on multiple threads simultaneously.'''
         total_completed = RawValue('i')
         job_processors = MultiQueue()
         def push(vent_port, sink_port, worker_pool):
