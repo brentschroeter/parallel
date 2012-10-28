@@ -22,25 +22,29 @@ def get_timeout():
     computation_time = 0.00004 * config.NUM_STRINGS * config.STR_LEN
     return transportation_time + computation_time
 
+def send_jobs(run_job, args):
+    test_str, = args
+    hp = hpy()
+    test_str = generate_str(config.STR_LEN)
+    for i in range(config.NUM_STRINGS):
+        run_job(str_job, (test_str))
+    size = hp.heap().size
+    if size > config.MEM_LIMIT:
+        self.fail('Heap size exceeded %d bytes (%d).' % (config.MEM_LIMIT, size))
+
+def on_recv_result(result, job_info, args):
+    total_completed, = args
+    total_completed.value += 1
+
 class TestParallel(unittest.TestCase):
     def test_mem(self):
         total_completed = RawValue('i')
         print 'Constructing test string (this could take some time).'
         test_str = generate_str(config.STR_LEN)
         print 'Done. Starting test.'
-        def on_recv_result(result, job_info):
-            total_completed.value += 1
-        def send_jobs(run_job):
-            hp = hpy()
-            test_str = generate_str(config.STR_LEN)
-            for i in range(config.NUM_STRINGS):
-                run_job(str_job, (test_str))
-            size = hp.heap().size
-            if size > config.MEM_LIMIT:
-                self.fail('Heap size exceeded %d bytes (%d).' % (config.MEM_LIMIT, size))
-
         total_completed.value = 0
-        start_workers, kill_workers = testing_lib.construct_worker_pool(config.num_local_workers(), config.WORKER_ADDRESSES, send_jobs, on_recv_result)
+
+        start_workers, kill_workers = testing_lib.construct_worker_pool(config.num_local_workers(), config.WORKER_ADDRESSES, send_jobs, (test_str,), on_recv_result, (total_completed,))
         start_workers()
         completion = testing_lib.check_for_completion(total_completed, config.NUM_STRINGS, get_timeout())
         kill_workers()

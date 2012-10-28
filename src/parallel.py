@@ -49,7 +49,7 @@ def add_connection(context, vent_addr, sink_addr):
     return receiver, sender
 
 # push jobs, handle replies, and process incoming jobs
-def worker_loop(context, queue, addresses, callback, vent_port, sink_port, worker_id=None):
+def worker_loop(context, queue, addresses, callback, callback_args, vent_port, sink_port, worker_id=None):
     vent_sender = context.socket(zmq.PUSH)
     vent_sender.bind('tcp://*:%s' % vent_port)
     time.sleep(0.1)
@@ -71,7 +71,7 @@ def worker_loop(context, queue, addresses, callback, vent_port, sink_port, worke
                 result, job_info = pickle.loads(s)
                 if job_info.job_id in sent_jobs:
                     if callback != None:
-                        callback(result, job_info)
+                        callback(result, job_info, callback_args)
                     sent_jobs.remove(job_info.job_id)
             except ZMQError:
                 break
@@ -90,8 +90,8 @@ def construct_worker(addresses, config={}):
     context = zmq.Context()
     queue = Queue.Queue()
 
-    def worker(callback):
-        worker_loop(context, queue, addresses, callback, vent_port, sink_port, worker_id)
+    def worker(callback, callback_args):
+        worker_loop(context, queue, addresses, callback, callback_args, vent_port, sink_port, worker_id)
 
     def close():
         context.destroy()

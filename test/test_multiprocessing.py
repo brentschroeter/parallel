@@ -32,19 +32,23 @@ def check_load_balance(job_processors):
             break
     return len(used_workers) >= min(config.NUM_JOBS, len(config.WORKER_ADDRESSES))
 
+def send_jobs(run_job, args):
+    for i in range(config.NUM_JOBS):
+        run_job(wait_job, (config.WAIT_TIME))
+
+def on_recv_result(result, job_info, args):
+    total_completed, job_processors = args
+    job_processors = args[1]
+    total_completed.value += 1
+    job_processors.put(job_info.worker_id)
+
 class TestParallel(unittest.TestCase):
     def test_multiprocessing(self):
         total_completed = RawValue('i')
         job_processors = MultiQueue()
-        def on_recv_result(result, job_info):
-            total_completed.value += 1
-            job_processors.put(job_info.worker_id)
-        def send_jobs(run_job):
-            for i in range(config.NUM_JOBS):
-                run_job(wait_job, (config.WAIT_TIME))
-
         total_completed.value = 0
-        start_workers, kill_workers = testing_lib.construct_worker_pool(config.num_local_workers(), config.WORKER_ADDRESSES, send_jobs, on_recv_result)
+
+        start_workers, kill_workers = testing_lib.construct_worker_pool(config.num_local_workers(), config.WORKER_ADDRESSES, send_jobs, (), on_recv_result, (total_completed, job_processors))
         start_workers()
         completion = testing_lib.check_for_completion(total_completed, config.NUM_JOBS, get_timeout(len(config.WORKER_ADDRESSES)))
         kill_workers()
@@ -56,14 +60,11 @@ class TestParallel(unittest.TestCase):
     def test_threading(self):
         total_completed = RawValue('i')
         job_processors = MultiQueue()
-        def result_received(result, job_info):
-            total_completed.value += 1
-            job_processors.put(job_info.worker_id)
         def push(vent_port, sink_port, worker_pool):
             worker, close, run_job = parallel.construct_worker(worker_pool, {'vent_port': vent_port, 'sink_port': sink_port})
             for i in range(config.NUM_JOBS):
                 run_job(wait_job, (config.WAIT_TIME))
-            worker(result_received)
+            worker(on_recv_result, (total_completed, job_processors))
 
         total_completed.value = 0
         port = 5000
