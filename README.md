@@ -16,7 +16,7 @@ Usage
         return num + 3
     
     def on_recv_result(result, job_info, args):
-        print 'Job #', job_info[2], ' returned the result: ', result
+        print 'Job #', job_info.job_id, ' returned the result: ', result
 
     for num in range(100):
         run_job(sample_job, (num,))
