@@ -1,7 +1,7 @@
-Parallel
+Python Parallel Processing Library
 ========
 
-Simple ZMQ-driven multiprocessing library.
+The `parallel` Python library provides a set of functions for simple distributed computation. It uses the ZeroMQ socket library for reliable data transport across any size of network.
 
 Usage
 -----
