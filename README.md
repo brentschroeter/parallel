@@ -27,3 +27,8 @@ Usage
 
     # send jobs, pull and process jobs, and handle completed jobs
     worker(on_recv_result, ())
+
+Example Flow
+----
+
+Workers are constructed and run on two different machines with `parallel.construct_worker()` and the returned `worker()` function. Another worker is constructed on a third machine. After (or before) the `worker()` function is called jobs are added to the queue with `run_job()`. Because there are three workers, the third worker sends the first three jobs and waits for replies. All three of the workers are watching for jobs and they each grab one of the first three jobs. When one finishes processing the job it sends back the result. The third worker receives the result and sends out another job.
